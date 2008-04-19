@@ -1,0 +1,131 @@
+#!/usr/bin/perl -l
+
+use lib qw( ../blib/lib ) ;
+use Curses;
+use Pg::Pcurse::Widget;
+use Pg::Pcurse;
+use Data::Dumper;
+use Pg::Pcurse::Query1;
+use strict;
+use warnings;
+
+use Getopt::Compact;
+use Pg::Pcurse::Misc;
+
+
+$opt = get_getopt;
+
+if ($opt->{h}) { print $opt->usage  ; init_screen; endwin; exit(0) }
+$opt = process_options($opt->opts);
+
+=begin a
+
+my $tab   =  pgbuffercache( $opt, 'misc' );
+print Dumper $tab;
+exit;
+
+=end a
+
+=cut
+
+## Test connection 
+unless (my $dh = dbconnect ( $opt, form_dsn($opt, '' ) ) ) {
+	print 'Could not connect to database. Exiting...';
+	init_screen; endwin;
+	exit(0);
+}
+
+init_screen;
+$::mwh  = create_root;
+my $dbs  = [ databases2 $opt ];
+my $main = form_dbmenu ($dbs);
+$::mode='tables';
+
+
+while(2) {
+	$main->draw($::mwh,1);
+	$main->execute($::mwh);
+
+	#TODO: who initialized $main::db ?
+        $::dbname  = $main::db || $opt->{dbname} || $dbs->[0] || 'template1';
+
+	# display database name
+        $::mwh->addstr(6,14, get_database2_desc);
+        my ($dbstr) = get_database2( $opt, $::dbname );
+        $::mwh->addstr(7,14, $dbstr );
+	$main->draw($::mwh,0);
+
+	# act according to ::mode
+	execute_mode( $::mode);
+}
+
+
+
+
+END { 
+	$::mwh->addstr(23,1,'Thank you for flying Pcurse!');
+	$::mwh->refresh;  
+        endwin() 
+}
+
+__END__
+
+=head1 NAME
+
+pcurse - Monitor  Postgres  databases
+
+=head1 SYNOPSIS
+
+$ pcurse --host  localhost --user john --passwd apple
+
+=head1 DESCRIPTION
+
+pcurse(1) monitors a Postgres database cluster. 
+It shows statistics on tables, indexes, vacuuming, buffers, etc,.
+
+=head1 NOTE
+
+pcurse(1) must connect to the Postgres server in order to do anything.
+At startup, pcurse(1) tests if your login is valid before executing 
+any graphics that might mess up the terminal.  
+I took great care not to mess up
+your screen, but remember you can always reset your terminal if
+the program exits abnormally and fails to restore the screen or your 
+blinking cursor in a sane state. CLOSE YOUR EYES AND TYPE 'reset' -- this 
+will reset your terminal screen.
+
+=head1 USAGE
+
+It is too simple.
+
+1. Select a 'MODE' from the menu. Use arrow keys, or the vi keys (j , k , m )
+or ENTER to navigate. TAB (or 'l') moves you to the next window.
+
+2. Most modes force you to select a namespace from the
+the 'Schemas' listbox. Arrows, vi keys, ENTER (or SPACE ) seals the
+selection. TAB (or 'l') moves you to the botton window.
+
+3. Bottom window contains the results. For most modes, keep pressing
+'P' for more screens and more results. TBB (or 'l') takes you back
+to the starting menu.
+
+4. Press 'q' to quit the program
+
+Thank you for flying Pcurse!
+
+=head1 SEE ALSO
+
+=head1 AUTHOR
+
+Ioannis Tambouras, E<lt>ioannis@cpan.orgE<gt>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) 2008 by Ioannis Tambouras
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms of GPLv3
+
+
+=cut
+
