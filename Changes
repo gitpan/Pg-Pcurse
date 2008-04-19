@@ -1,5 +1,9 @@
 Revision history for Perl extension Pg::Pcurse.
 
+0.02  Sat Apr 19 19:08:32 2008
+	- Corrected module dependencies
+	- Fixed usage documentation
+
 0.01  Thu Apr 17 23:06:48 2008
 	- original version; created by h2xs 1.23 with options
 		-AXn Pg::Pcurse

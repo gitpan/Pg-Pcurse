@@ -10,6 +10,8 @@ WriteMakefile(
 	                   #'File::Slurp'        => '9999.12',
 	                   #'FindBin'            => '1.47',
 	                   #'Log::Log4perl'      => '1.06',
+                           'Data::Dumper'        => '0',
+                           'DBIx::Abstract'      => '0',
 	                   'Carp::Assert'        => '0',
 	                   'Curses'              => '0',
 	                   'Curses::Widgets'     => '0',

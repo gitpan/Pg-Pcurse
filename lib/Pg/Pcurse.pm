@@ -1,6 +1,3 @@
-# Copyright (C) 2008 Ioannis Tambouras <ioannis@cpan.org>. All rights reserved.
-# LICENSE:  GPLv3, eead licensing terms at  http://www.fsf.org .
-
 package Pg::Pcurse;
 
 use 5.008008;
@@ -19,7 +16,7 @@ use Curses::Widgets::Menu;
 use strict;
 use Pg::Pcurse::Query1;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 our $opt;
 
@@ -162,8 +159,7 @@ __END__
 
 =head1 NAME
 
-Pg::Pcurse - Monitors Postgres clusters. No elephant jokes. 
-
+Pg::Pcurse - Monitor a Postgres  cluster.
 
 =head1 SYNOPSIS
 

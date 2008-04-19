@@ -1,5 +1,3 @@
-# Copyright (C) 2008 Ioannis Tambouras <ioannis@cpan.org>. All rights reserved.
-# LICENSE:  GPLv3, eead licensing terms at  http://www.fsf.org .
 package Pg::Pcurse::Query1;
 use DBIx::Abstract;
 use Carp::Assert;

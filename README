@@ -7,7 +7,7 @@ vacuuming, buffers, etc,.
 
 USAGE
 
-It is very brief, and contained in the USAGE file.
+Read the one paragraph in the USAGE file.
 
 INSTALLATION
 
@@ -51,6 +51,9 @@ Carp::Assert
 Curses
 Curses::Widgets
 Getopt::Compact
+DBIx::Abstract
+Data::Dumper
+
 
 
 COPYRIGHT AND LICENCE

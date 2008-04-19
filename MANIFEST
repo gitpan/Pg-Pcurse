@@ -11,6 +11,7 @@ USAGE
 LICENSE
 script/makefile
 script/pcurse
+script/pg_service.conf
 t/00_load.t
 t/01b_pod.t
 t/01c_coverage.t

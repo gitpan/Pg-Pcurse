@@ -1,5 +1,5 @@
 
-It is too simple.
+It is too simple:
 
 1. Select a 'MODE' from the menu. 
    To navigate, use arrow keys, the vi keys (j ,k , m ), or ENTER .
@@ -10,15 +10,10 @@ It is too simple.
    TAB (or 'l') moves you to the botton window.
 
 3. The results are displayed in the bottom window. 
-   Keep pressing 'p' for more screens and more results. 
+   Keep pressing 'd' for more screens and more results. 
    TBB (or 'l') takes you back to the starting menu.
 
 4. Press 'q' to quit the program
-
-The main purpose of Pcurse is to run in a terminal, and
-not in a terminal emulator. It does work under Xorg with xterm,
-and emulators, but some (like rxvt) refuse to display
-the results after pressing 'd'.
 
 Thank you for flying Pcurse!
 
