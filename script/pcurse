@@ -18,9 +18,12 @@ $opt = get_getopt;
 if ($opt->{h}) { print $opt->usage  ; init_screen; endwin; exit(0) }
 $opt = process_options($opt->opts);
 
+
 =begin a
 
-my $tab   =  pgbuffercache( $opt, 'misc' );
+my $tab   =  types2text($opt, '16 16 25');
+
+#database_to_xml 
 print Dumper $tab;
 exit;
 
@@ -96,22 +99,26 @@ will reset your terminal screen.
 
 =head1 USAGE
 
-It is too simple.
 
-1. Select a 'MODE' from the menu. Use arrow keys, or the vi keys (j , k , m )
-or ENTER to navigate. TAB (or 'l') moves you to the next window.
+It is too simple:
 
-2. Most modes force you to select a namespace from the
-the 'Schemas' listbox. Arrows, vi keys, ENTER (or SPACE ) seals the
-selection. TAB (or 'l') moves you to the botton window.
+1. Select a 'MODE' from the menu.
+   To navigate, use arrow keys, the vi keys (j ,k , m ), or ENTER .
+   TAB (or 'l') moves you to the next window.
 
-3. Bottom window contains the results. For most modes, keep pressing
-'P' for more screens and more results. TBB (or 'l') takes you back
-to the starting menu.
+2. Most modes requires to select a namespace from the the 'Schemas' listbox.
+   Use arrows, vi keys, ENTER (or SPACE, or ' ' ) seals the selection.
+   Keep pressing 'd' to view more details on results.
+   TAB (or 'l') moves you to the button window.
+
+3. The results are displayed in the bottom window.
+   Use arrows, vi keys, ENTER (or SPACE, or ' ' ) seals the selection.
+   Keep pressing 'd' to view more details on results.
+   TBB (or 'l') takes you back to the starting menu.
 
 4. Press 'q' to quit the program
 
-Thank you for flying Pcurse!
+
 
 =head1 SEE ALSO
 

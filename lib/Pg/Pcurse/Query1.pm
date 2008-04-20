@@ -1,3 +1,5 @@
+# Copyright (C) 2008 Ioannis Tambouras <ioannis@cpan.org>. All rights reserved.
+# LICENSE:  GPLv3, eead licensing terms at  http://www.fsf.org .
 package Pg::Pcurse::Query1;
 use DBIx::Abstract;
 use Carp::Assert;
@@ -5,6 +7,7 @@ use base 'Exporter';
 use Data::Dumper;
 use strict;
 use warnings;
+our $VERSION = '0.03';
 
 our @EXPORT = qw( 
 	form_dsn      first_word      dbconnect 
@@ -13,16 +16,17 @@ our @EXPORT = qw(
         get_setting   get_proc_desc   tables_vacuum2
         get_proc      table_buffers   over_dbs
 
-	get_tables2_desc
-	tables_vacuum_desc 
-        pgbuffercache
-        proc_of
+	get_tables2_desc         tables_vacuum_desc 
+        pgbuffercache            proc_of
+	get_nspacl               view_of
+        types2text
 
         table_stat_desc          table_stat
 	all_databases_desc       all_databases 
 	get_database2_desc       get_database2 
 	get_schemas              get_schemas2 
 	get_tables_all_desc      get_tables_all
+	get_views_all_desc       get_views_all
 	index2_desc              index2 
 	get_index_desc           get_index 
 	table_stats_desc         table_stats 
@@ -530,6 +534,25 @@ sub statsoftable {
         ];
 }
 
+sub one_type {
+        my ($dh, $oid )= @_;
+	my  ($ret) = $dh->select_one_to_array( << "" );
+		pg_catalog.format_type( $oid, $oid )
+
+	$ret;
+}
+
+
+sub types2text {
+	my ($o, $str) = @_;
+        my $dh = dbconnect( $o, form_dsn($o, $o->{dhname}) ) or return;
+	my @oids = split /\s+/, $str||return '';
+	return '' unless @oids;
+	my $ret = '';
+        $ret = $ret . one_type( $dh, $_) .  '   '   for @oids;
+	$ret;
+}
+
 sub proc_of {
         my ($o, $database, $oid )= @_;
         my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
@@ -550,8 +573,8 @@ sub proc_of {
                 where p.oid = ?
 
 
-        my $h = $st->fetchrow_hashref  ;
-	$dh->{dbh}->rollback;
+        my $h             = $st->fetchrow_hashref  ;
+	$h->{proargtypes} = types2text( $o, $h->{proargtypes} );
 
 	[ sprintf( '%-12s : %s', 'name',     $h->{proname}     ),
           sprintf( '%-12s : %s', 'oid',         $oid              ),
@@ -638,5 +661,48 @@ sub pgbuffercache {
 	[ map { sprintf '%-35s : %9s', @{$_}[0..1] }  @$h ]
 }   
 
+
+sub get_nspacl {
+	my ($o, $database, $schema) = @_;
+        my $dh  = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+        $schema = $dh->quote( $schema );
+	my $h   = $dh->select_one_to_hashref({
+                   fields => 'nspacl', 
+                   table  =>  'pg_namespace',
+		   where  => [ 'nspname','=', $schema ] 
+        });
+   
+
+	[ sprintf "%s", $h->{nspacl} ? "@{ $h->{nspacl} }": '' ];
+}
+sub get_views_all_desc {
+	sprintf '%-35s %10s','NAME', 'OWNER' ;
+} 
+sub get_views_all {
+	my ($o, $database , $schema) = @_;
+        $database or $database = $o->{dbname} ;
+	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
+	$schema = $dh->quote($schema);
+        my $st  = $dh->select(  [qw( viewname viewowner )],
+	                       'pg_views',
+                               ['schemaname', '=', $schema ] );
+	[ sort map { sprintf '%-35s %10s', @{$_}[0..1]}
+	       @{$st->fetchall_arrayref} ];
+}
+sub view_of {
+	my ($o, $database , $schema, $view) = @_;
+
+        $database or $database = $o->{dbname} ;
+	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
+	$view   = $dh->quote($view)  ;
+	$schema = $dh->quote($schema);
+        my $h  = $dh->select_one_to_hashref( 'definition',
+	                                     'pg_views',
+                                             ['schemaname' , '=', $schema, 
+                                              'and viewname','=', $view ]);
+	 $h->{definition} ;
+}
+
 1;
 __END__
+	  sprintf( '%-14s : %s', 'acl',      

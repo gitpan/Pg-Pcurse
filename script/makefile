@@ -9,9 +9,9 @@ OPTS     =  -lw
 
 #all: try
 #all: pcurse
-#all: pcurseSuper
+all: pcurseSuper
 #all: podp
-all: coot
+#all: coot
 #all: puffy
 
 demo try e*:

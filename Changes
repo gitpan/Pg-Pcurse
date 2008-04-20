@@ -1,5 +1,9 @@
 Revision history for Perl extension Pg::Pcurse.
 
+0.03  Sun Apr 20 04:12:49 2008
+	- Added 'views' mode
+	- procedure arg type are shown in english names
+
 0.02  Sat Apr 19 19:08:32 2008
 	- Corrected module dependencies
 	- Fixed usage documentation

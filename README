@@ -7,12 +7,13 @@ vacuuming, buffers, etc,.
 
 USAGE
 
-Read the one paragraph in the USAGE file.
+Documentation for usage is described inside the USAGE file, or 
+in the pcurse(1) pod .
 
 INSTALLATION
 
 This module depends on Curses and Curses::Widgets . If you
-have problems intalling them, it is probably you are
+have problems installing them, it is probably you are
 missing the header files for libcurses. Debian-bases distributions
 will need the libncurses5-dev  package:
 

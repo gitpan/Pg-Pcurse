@@ -1,3 +1,6 @@
+# Copyright (C) 2008 Ioannis Tambouras <ioannis@cpan.org>. All rights reserved.
+# LICENSE:  GPLv3, eead licensing terms at  http://www.fsf.org .
+
 package Pg::Pcurse;
 
 use 5.008008;
@@ -16,7 +19,7 @@ use Curses::Widgets::Menu;
 use strict;
 use Pg::Pcurse::Query1;
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 our $opt;
 
@@ -24,7 +27,7 @@ use base 'Exporter';
 
 our @EXPORT = qw( 
 	execute_mode       retrieve_context
-	$opt
+	$opt               retrieve_permit
 );
 
 *secondary_listbox = *main::secondary_listbox;
@@ -36,6 +39,7 @@ sub execute_mode {
         my $mode = shift;
         ({  
 	    tables   => sub { show_tables()    },
+	    views    => sub { show_views()     },
             overview => sub { show_overview()  },
             vacuum   => sub { show_vacuum()    },
             stats    => sub { show_stats()     },
@@ -64,14 +68,14 @@ sub same_movie {
         my ($desc, $actual) = @_ ;
 
         #  Schema Table
-        my $she     = get_schemas2( $opt, $::dbname) or return;
-        my $schemas = secondary_listbox('Schemas', $she, 2,37);
-        $schemas->draw($::mwh,0);
-        $schemas->execute($::mwh,0);
-        $schemas->draw($::mwh,0);
+        $::she     = get_schemas2( $opt, $::dbname) or return;
+        $::schemas = secondary_listbox('Schemas', $::she, 2,37);
+        $::schemas->draw($::mwh,0);
+        $::schemas->execute($::mwh,0);
+        $::schemas->draw($::mwh,0);
 
         # Display Resust ( like relevant tables, indexes, objects, etc,. )
-        ($::sname) = first_word( $she->[ $schemas->getField('VALUE')] );
+        ($::sname) = first_word( $::she->[ $::schemas->getField('VALUE')] );
         $desc      = $desc->();
         $::tab     = $actual->( $opt, $::dbname, $::sname);
         $::big     = big_listbox( $desc, $::tab, 11, 0);
@@ -82,13 +86,23 @@ sub same_movie {
 sub show_stats   { same_movie( \&table_stats_desc, \&table_stats       )  }
 sub show_vacuum  { same_movie( \&tables_vacuum_desc, \&tables_vacuum   )  }
 sub show_tables  { same_movie( \&get_tables_all_desc, \&get_tables_all )  }
+sub show_views   { same_movie( \&get_views_all_desc, \&get_views_all   )  }
 sub show_procedu { same_movie( \&get_proc_desc, \&get_proc             )  }
 sub show_indexes { same_movie( \&index2_desc, \&index2                 )  }
 
 
 ## Another dispatcher
+sub retrieve_permit {
+        #my $index = $::schemas->getField('VALUE');
+        #my $schema = $::schemas->getField('VALUE');
+        my ($sna) = first_word( $::she->[ $::schemas->getField('VALUE')] );
+	get_nspacl($opt, $::dbname, $sna) ;
+}
+
+## Another dispatcher
 sub retrieve_context {
         ({  tables     => \& tstat    ,
+            views      => \& viewof   ,
             vacuum     => \& vacuum2  ,
             overview   => \& over2    ,
             stats      => \& statsof  ,
@@ -119,6 +133,12 @@ sub statsof  {
         my $index = $::big->getField('VALUE');
         my ($f) = first_word( $::tab->[$index] );
         statsoftable( $opt, $::dbname, $::sname,  $f) ;
+} 
+sub viewof  { 
+        my $index =  $::big->getField('VALUE');
+        my ($f)   =  first_word( $::tab->[$index] );
+        my $text  =  view_of( $opt, $::dbname, $::sname,  $f) ;
+	[  textwrap($text, 50) ];
 } 
 
 sub settingof {
@@ -159,7 +179,8 @@ __END__
 
 =head1 NAME
 
-Pg::Pcurse - Monitor a Postgres  cluster.
+Pg::Pcurse - Monitors a Postgres cluster
+
 
 =head1 SYNOPSIS
 

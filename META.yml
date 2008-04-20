@@ -1,34 +1,14 @@
----
-name: Pg-Pcurse
-version: 0.02
-author:
-  - 'Ioannis Tambouras<ioannis@cpan.org>'
-abstract: Monitor a Postgres  cluster.
-license: gpl
-resources:
-  license: http://www.opensource.org/licenses/gpl-license.php
+# http://module-build.sourceforge.net/META-spec.html
+#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
+name:         Pg-Pcurse
+version:      0.03
+version_from: lib/Pg/Pcurse.pm
+installdirs:  site
 requires:
-  Carp::Assert: 0
-  Curses: 0
-  Curses::Widgets: 0
-  DBIx::Abstract: 0
-  Data::Dumper: 0
-  Getopt::Compact: 0
-  perl: 5.8
-recommends:
-  Test::More: 0
-  Test::Pod: 1.2
-provides:
-  Pg::Pcurse:
-    file: lib/Pg/Pcurse.pm
-    version: 0.02
-  Pg::Pcurse::Misc:
-    file: lib/Pg/Pcurse/Misc.pm
-  Pg::Pcurse::Query1:
-    file: lib/Pg/Pcurse/Query1.pm
-  Pg::Pcurse::Widget:
-    file: lib/Pg/Pcurse/Widget.pm
-generated_by: Module::Build version 0.2808
-meta-spec:
-  url: http://module-build.sourceforge.net/META-spec-v1.2.html
-  version: 1.2
+    Carp::Assert:                  0
+    Curses:                        0
+    Curses::Widgets:               0
+    Getopt::Compact:               0
+
+distribution_type: module
+generated_by: ExtUtils::MakeMaker version 6.30_01

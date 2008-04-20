@@ -6,11 +6,13 @@ It is too simple:
    TAB (or 'l') moves you to the next window.
 
 2. Most modes requires to select a namespace from the the 'Schemas' listbox. 
-   Arrows, vi keys, ENTER (or SPACE ) seals the selection. 
-   TAB (or 'l') moves you to the botton window.
+   Use arrows, vi keys, ENTER (or SPACE, or ' ' ) seals the selection. 
+   Keep pressing 'd' to view more details on results.
+   TAB (or 'l') moves you to the button window.
 
 3. The results are displayed in the bottom window. 
-   Keep pressing 'd' for more screens and more results. 
+   Use arrows, vi keys, ENTER (or SPACE, or ' ' ) seals the selection. 
+   Keep pressing 'd' to view more details on results.
    TBB (or 'l') takes you back to the starting menu.
 
 4. Press 'q' to quit the program

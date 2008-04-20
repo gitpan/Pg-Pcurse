@@ -1,14 +1,16 @@
+# Copyright (C) 2008 Ioannis Tambouras <ioannis@cpan.org>. All rights reserved.
+# LICENSE:  GPLv3, eead licensing terms at  http://www.fsf.org .
 package Pg::Pcurse::Widget;
 use Curses;
 use Curses::Widgets;
 use Carp::Assert;
 use Curses::Widgets::Menu;
-#use Curses::Widgets::Label;
-#use Curses::Widgets::ButtonSet;
-#use Curses::Widgets::Listbox;
+use Curses::Widgets::Label;
 use strict;
 use warnings;
 use Pg::Pcurse;
+our $VERSION = '0.03';
+
 
 use base 'Exporter';
 
@@ -17,11 +19,28 @@ our @EXPORT = qw(
 	          create_root
 		  create_commentbox
 	          create_menu
-	          create_botton
+	          create_botton 
 	          main_listbox  secondary_listbox  big_listbox
 		  form_dbmenu
 );
 
+sub miniscan_sec {
+	noecho();
+        my $mwh = shift;
+        my $key = -1;
+        while ($key eq -1) {
+                $key = $mwh->getch;
+                if($key eq "j")  { return KEY_DOWN    };
+                if($key eq "k")  { return KEY_UP      };
+                if($key eq "h")  { return "\n"        };
+                if($key eq ' ')  { return "\e"        };
+                if($key eq 'm')  { return KEY_RIGHT   };
+                if($key eq 'd')  { got_d($mwh)        };
+                if($key eq 'n')  { return KEY_LEFT    };
+                if($key eq 'q')  { exit 0             };
+        }
+        return $key;
+}
 sub miniscan {
 	noecho();
         my $mwh = shift;
@@ -39,6 +58,7 @@ sub miniscan {
         return $key;
 }
 
+
 sub _Database_Menu_Choice {
         my $dbs = shift;
         my $ret ;
@@ -55,15 +75,17 @@ sub form_dbmenu {
                                 System    => sub { $::hid{system}++} },
                       Mode      =>{ ITEMORDER => [qw( Vacuum   Stats
                                                     Procedures Tables    
+                                                    Views 
                                                     Overview   Buffers 
                                                     Indexes   Settings
                                                   )],
                                 Vacuum     => sub { $::mode = 'vacuum'    },
-                                Tables     => sub { $::mode = 'tables'    },
                                 Stats      => sub { $::mode = 'stats'     },
+                                Procedures => sub { $::mode = 'procedu'   },
+                                Tables     => sub { $::mode = 'tables'    },
+                                Views      => sub { $::mode = 'views'     },
                                 Indexes    => sub { $::mode = 'indexes'   },
                                 Overview   => sub { $::mode = 'overview'  },
-                                Procedures => sub { $::mode = 'procedu'   },
                                 Buffers    => sub { $::mode = 'buffers'   },
                                 Settings   => sub { $::mode = 'settings'  },
 				   },	
@@ -142,9 +164,9 @@ sub jscan {
         while ($key eq -1) {
                 $key = $mwh->getch;
                 if($key eq 'd') { got_h( $mwh ) }
-                if($key eq 'h') { got_h( $mwh ) }
                 if($key eq 'j')  { return KEY_DOWN};
                 if($key eq 'k')  { return KEY_UP};
+                if($key eq 'h')  { return "\n"  };
                 if($key eq ' ')  { return "\n"  };
                 if($key eq 'q')  { exit 0       };
         }
@@ -184,7 +206,7 @@ sub secondary_listbox {
 		  LINES       => 7,
 		  LISTITEMS   => $list,
 		  MULTISEL    => 0,
-		  INPUTFUNC   => \&miniscan,
+		  INPUTFUNC   => \&miniscan_sec,
 		  FOCUSSWITCH => "\tl",
 		  SELECTEDCOL => 'green',
 		  CAPTION     => $title,
@@ -224,11 +246,19 @@ sub create_mini_root {
         $mwh->standend();
         $mwh;
 }
+my $sroot      = create_mini_root ( 5,40,3,40);
 my $win_secret = create_mini_root ( 20,81,4,0);
 
+sub got_d {
+        my $mwh = shift;
+        my $ll_secret = label_sec( 4,29,0,0) or return;
+        $sroot->box(0,0);
+        $ll_secret->draw($sroot);
+        $ll_secret->execute($sroot);
+        sleep 1;
+}
 sub got_h {
         my $mwh = shift;
-        #my $val = $::big->getField('VALUE');
         my $lb_secret  = listbox5 (18,78,0,0)  or return;
         $lb_secret->draw($win_secret,0);
         $lb_secret->execute($win_secret);
@@ -238,7 +268,6 @@ sub got_h {
 
 sub listbox5 {
         my ( $lines, $cols, $y,$x) = @_;
-	#my $content = retrieve_context ( $::tab, $::mode) or return;
 	my $content = retrieve_context ( ) or return;
         new Curses::Widgets::ListBox {
                   Y           => $x||1,
@@ -258,6 +287,21 @@ sub listbox5 {
                   VALUE       =>  0,
           };
 
+}
+
+sub label_sec {
+        my ( $lines, $cols, $y,$x) = @_;
+	my $content = retrieve_permit() or return;
+        new  Curses::Widgets::Label {
+		   COLUMNS     =>  $cols,
+		   LINES       =>  $lines,
+		   VALUE       =>  "@$content",
+		   FOREGROUND  =>  'white',
+		   BACKGROUND  =>  'blue',
+		   X           =>  $x,
+		   Y           =>  $y,
+		   ALIGNMENT   => 'C',
+        };
 }
 
 1;
