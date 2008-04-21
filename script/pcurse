@@ -21,10 +21,9 @@ $opt = process_options($opt->opts);
 
 =begin a
 
-my $tab   =  types2text($opt, '16 16 25');
-
-#database_to_xml 
-print Dumper $tab;
+#my $tab   =  types2text($opt, '16 16 25');
+my $text  =  view_of( $opt, 'devhip', 'hip', 'accounts_joi' ) ;
+#print Dumper $tab;
 exit;
 
 =end a

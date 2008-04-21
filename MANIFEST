@@ -9,7 +9,6 @@ MANIFEST
 README
 USAGE
 LICENSE
-script/makefile
 script/pcurse
 t/00_load.t
 t/01b_pod.t

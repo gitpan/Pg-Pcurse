@@ -7,19 +7,19 @@ use base 'Exporter';
 use Data::Dumper;
 use strict;
 use warnings;
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 our @EXPORT = qw( 
-	form_dsn      first_word      dbconnect 
-	databases     databases2      tables_vacuum 
-        to_d          get_table       all_settings   
-        get_setting   get_proc_desc   tables_vacuum2
-        get_proc      table_buffers   over_dbs
+	form_dsn       first_word      dbconnect 
+	databases      databases2      tables_vacuum 
+        to_d           get_table       all_settings   
+        get_proc_desc  get_proc        tables_vacuum2
+        get_setting    table_buffers   over_dbs
 
 	get_tables2_desc         tables_vacuum_desc 
         pgbuffercache            proc_of
 	get_nspacl               view_of
-        types2text
+        types2text               rule_of
 
         table_stat_desc          table_stat
 	all_databases_desc       all_databases 
@@ -32,6 +32,7 @@ our @EXPORT = qw(
 	table_stats_desc         table_stats 
 	table_stats2_desc        table_stats2 
         statsoftable_desc        statsoftable 
+        rules_desc               rules
 );
 
 
@@ -597,8 +598,7 @@ sub proc_of {
 	  #sprintf( '%-12s : %s', 'bin',      $h->{probin}      ),
 	  sprintf( '%-12s : %s', 'config',   $h->{proconfig}   ),
 	  sprintf( '%-12s : %s', 'acl',      $h->{proacl}      ),
-	  #sprintf( '%-12s : %s', 'src',
-                    #$h->{prosrc}      ? "@{ $h->{prosrc}}": ''),
+	  sprintf( '%-12s : %s', 'src',      $h->{prosrc}||''  ),
 	]
 }
 sub pgbuffercache_old {
@@ -696,11 +696,38 @@ sub view_of {
 	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
 	$view   = $dh->quote($view)  ;
 	$schema = $dh->quote($schema);
-        my $h  = $dh->select_one_to_hashref( 'definition',
-	                                     'pg_views',
+        my $h   = $dh->select_one_to_hashref( 'definition',
+	                                      'pg_views',
                                              ['schemaname' , '=', $schema, 
                                               'and viewname','=', $view ]);
 	 $h->{definition} ;
+}
+sub rules_desc {
+	sprintf '%-35s','NAME';
+} 
+sub rules {
+	my ($o, $database , $schema) = @_;
+        $database or $database = $o->{dbname} ;
+	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
+	$schema = $dh->quote($schema);
+        my $st  = $dh->select(  [qw( rulename )],
+	                       'pg_rules',
+                               ['schemaname', '=', $schema ] );
+	[ sort map { sprintf '%-35s', ${$_}[0]}
+	       @{$st->fetchall_arrayref} ];
+}
+sub rule_of {
+	my ($o, $database , $schema, $rule) = @_;
+        $database or $database = $o->{dbname} ;
+	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
+	$schema = $dh->quote($schema);
+	$rule   = $dh->quote($rule);
+        my $h   = $dh->select_one_to_hashref (  
+                                'definition', 'pg_rules',
+                               ['schemaname', '=', $schema , 
+                                'and', 'rulename', '=', $rule ]) ;
+
+	sprintf '%-35s',  $h->{definition} ;
 }
 
 1;

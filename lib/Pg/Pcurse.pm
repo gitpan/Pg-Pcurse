@@ -19,7 +19,7 @@ use Curses::Widgets::Menu;
 use strict;
 use Pg::Pcurse::Query1;
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 our $opt;
 
@@ -46,6 +46,7 @@ sub execute_mode {
             buffers  => sub { show_buffers()   },
             indexes  => sub { show_indexes()   },
             procedu  => sub { show_procedu()   },
+            rules    => sub { show_rules()     },
             settings => sub { show_settings()  },
          } -> {$mode})->();
 }
@@ -89,6 +90,7 @@ sub show_tables  { same_movie( \&get_tables_all_desc, \&get_tables_all )  }
 sub show_views   { same_movie( \&get_views_all_desc, \&get_views_all   )  }
 sub show_procedu { same_movie( \&get_proc_desc, \&get_proc             )  }
 sub show_indexes { same_movie( \&index2_desc, \&index2                 )  }
+sub show_rules   { same_movie( \&rules_desc, \&rules                   )  }
 
 
 ## Another dispatcher
@@ -109,6 +111,7 @@ sub retrieve_context {
             settings   => \& settingof,
             procedu    => \& procof   ,
 	    buffers    => \& bufferca ,
+	    rules      => \& ruleof   ,
             indexes    => \& indexof  ,
 
          }->{$::mode||return})->(@_) ;
@@ -123,6 +126,14 @@ sub bufferca{ [@{ pgbuffercache( $opt, $::dbname) }]}
 #sub procedu{ [get_proc_desc,  @{get_proc($opt, $::dbname, $::sname )}] }
 #sub buffers { [ @{table_buffers( $opt, '')}]}
 
+
+sub ruleof {
+        my $index = $::big->getField('VALUE');
+        my ($f)   = first_word( $::tab->[$index] );
+        my $text  = rule_of( $opt, $::dbname, $::sname, $f ) or return [];
+	[  textwrap($text, 50) ];
+}
+
 sub over2  { 
         my $index = $::big->getField('VALUE');
         my ($f) = first_word( $::tab->[$index] );
@@ -134,11 +145,34 @@ sub statsof  {
         my ($f) = first_word( $::tab->[$index] );
         statsoftable( $opt, $::dbname, $::sname,  $f) ;
 } 
+sub viewof_old  { 
+        my $index =  $::big->getField('VALUE');
+        my ($f)   =  first_word( $::tab->[$index] );
+        my $text  =  view_of( $opt, $::dbname, $::sname,  $f) ;
+	my @all   =   Curses::Widgets::textwrap($text, 50) ;
+	my @ret  ;
+	for (@all) {
+		my @parts =split /\bFROM\b/i, $_ ,2 ;
+		(@parts>1) ?  push( @ret, $parts[0], 'FROM '. $parts[1] )
+			   :  push( @ret, @parts );
+	};
+	[ @ret ];
+} 
+sub sql_formater {
+	local $_ = shift or return '';
+	return $_  if /^(select|from)/i ;
+	return "    $_";
+}
 sub viewof  { 
         my $index =  $::big->getField('VALUE');
         my ($f)   =  first_word( $::tab->[$index] );
         my $text  =  view_of( $opt, $::dbname, $::sname,  $f) ;
-	[  textwrap($text, 50) ];
+	[  map { sql_formater( $_ ) }
+	   map { my @parts  = split  /\bFROM\b/i, $_ ,2  ;
+		 (@parts>1) ?  ($parts[0], 'FROM '. $parts[1])  : $parts[0] 
+                }
+		Curses::Widgets::textwrap($text, 50) 
+        ];
 } 
 
 sub settingof {

@@ -9,7 +9,7 @@ use Curses::Widgets::Label;
 use strict;
 use warnings;
 use Pg::Pcurse;
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 
 use base 'Exporter';
@@ -33,7 +33,7 @@ sub miniscan_sec {
                 if($key eq "j")  { return KEY_DOWN    };
                 if($key eq "k")  { return KEY_UP      };
                 if($key eq "h")  { return "\n"        };
-                if($key eq ' ')  { return "\e"        };
+                if($key eq ' ')  { return "\n"        };
                 if($key eq 'm')  { return KEY_RIGHT   };
                 if($key eq 'd')  { got_d($mwh)        };
                 if($key eq 'n')  { return KEY_LEFT    };
@@ -211,7 +211,9 @@ sub secondary_listbox {
 		  SELECTEDCOL => 'green',
 		  CAPTION     => $title,
 		  CAPTIONCOL  => 'yellow',
-		  VALUE       => 0,
+		  VALUE       => ($::schemas)
+                                   ? $::schemas->getField('VALUE') : 0
+                                 ,
 	  };
 }
 sub big_listbox {

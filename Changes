@@ -1,5 +1,15 @@
 Revision history for Perl extension Pg::Pcurse.
 
+0.04  Sun Apr 20 20:39:33 2008
+	- Added 'rules' mode
+	- Better lexer for sql stataments
+	- added ' ' in keyscan for shcema box
+	- added 'h' to un-pop the menu display
+	- added acl display for schema box
+	- The shcema choice is remembered (when possible) accross 
+          round of selections
+	- Fixed the default mode back to 'tables'
+
 0.03  Sun Apr 20 04:12:49 2008
 	- Added 'views' mode
 	- procedure arg type are shown in english names
