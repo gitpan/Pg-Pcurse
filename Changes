@@ -1,5 +1,9 @@
 Revision history for Perl extension Pg::Pcurse.
 
+0.04  Man Apr 21 03:52:35 2008
+	- changed the blue screen of 'tables' to statsof()
+	- Fixed module dependacies
+
 0.04  Sun Apr 20 20:39:33 2008
 	- Added 'rules' mode
 	- Better lexer for sql stataments

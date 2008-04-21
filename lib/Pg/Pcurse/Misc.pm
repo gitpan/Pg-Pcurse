@@ -4,7 +4,7 @@ package Pg::Pcurse::Misc;
 use Carp::Assert;
 use Getopt::Compact;
 use base 'Exporter';
-our $VERSION = '0.03';
+our $VERSION = '0.05';
 
 @EXPORT = qw(
 	get_getopt

@@ -19,7 +19,7 @@ use Curses::Widgets::Menu;
 use strict;
 use Pg::Pcurse::Query1;
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 our $opt;
 
@@ -103,7 +103,9 @@ sub retrieve_permit {
 
 ## Another dispatcher
 sub retrieve_context {
-        ({  tables     => \& tstat    ,
+        ({  
+	   #tables     => \& tstat    ,
+	    tables     => \& statsof  ,
             views      => \& viewof   ,
             vacuum     => \& vacuum2  ,
             overview   => \& over2    ,
