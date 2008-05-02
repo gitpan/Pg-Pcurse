@@ -8,12 +8,15 @@ It is too simple:
 
 2. Most modes requires to select a namespace from the the 'Schemas' listbox. 
    Use arrows, vi keys, ENTER (or SPACE, ' ', or 'h' ) seals the selection. 
-   Keep pressing 'd' to view more details on results.
+   Press 'd' to view more acl permissions on schema
    TAB (or 'l') moves you to the button window.
 
 3. The results are displayed in the bottom window. 
    Use arrows, vi keys, ENTER (or SPACE, ' ', or 'h' ) seals the selection. 
    Keep pressing 'd' to view more details on results.
+   'D'  key displays records of a table (CAUTION: no safe for long tables)
+   'A'  key attemps to analyze the table, or database
+   'V'  key attemps to vacume  the table, or database
    TBB (or 'l') takes you back to the starting menu.
 
 4. Press 'q' to quit the program

@@ -2,16 +2,18 @@
 
 use lib qw( ../blib/lib ) ;
 use Curses;
-use Pg::Pcurse::Widget;
 use Pg::Pcurse;
+use Pg::Pcurse::Widget;
 use Data::Dumper;
-use Pg::Pcurse::Query1;
+use Getopt::Compact;
 use strict;
 use warnings;
 
-use Getopt::Compact;
 use Pg::Pcurse::Misc;
+use Pg::Pcurse::Query0;
+use Pg::Pcurse::Query1;
 
+*addstr = \&Curses::Widgets::addstr;
 
 $opt = get_getopt;
 
@@ -21,11 +23,12 @@ $opt = process_options($opt->opts);
 
 =begin a
 
-#my $tab   =  types2text($opt, '16 16 25');
-my $text  =  view_of( $opt, 'devhip', 'hip', 'accounts_joi' ) ;
-#print Dumper $tab;
-exit;
+#my $tab = tables_brief ($opt, 'bucardo', 'pg_toast' );
+my $tab  = vacuum_per_table( $opt, 'people', 'public', 'person');
 
+print Dumper $tab;
+print 'done';
+exit;
 =end a
 
 =cut
@@ -41,8 +44,10 @@ init_screen;
 $::mwh  = create_root;
 my $dbs  = [ databases2 $opt ];
 my $main = form_dbmenu ($dbs);
+$::mode='vacuum';
 $::mode='tables';
 
+init_mini_root;
 
 while(2) {
 	$main->draw($::mwh,1);
@@ -54,7 +59,8 @@ while(2) {
 	# display database name
         $::mwh->addstr(6,14, get_database2_desc);
         my ($dbstr) = get_database2( $opt, $::dbname );
-        $::mwh->addstr(7,14, $dbstr );
+        $::mwh->addstr(5,10, sprintf 'Mode  = %-13s', ucfirst$::mode   );
+        $::mwh->addstr(7,10, sprintf 'DBase = %-8s', $dbstr    );
 	$main->draw($::mwh,0);
 
 	# act according to ::mode
@@ -107,12 +113,15 @@ It is too simple:
 
 2. Most modes requires to select a namespace from the the 'Schemas' listbox.
    Use arrows, vi keys, ENTER (or SPACE, or ' ' ) seals the selection.
-   Keep pressing 'd' to view more details on results.
+   Press 'd' to view more acl permissions on schema
    TAB (or 'l') moves you to the button window.
 
 3. The results are displayed in the bottom window.
    Use arrows, vi keys, ENTER (or SPACE, or ' ' ) seals the selection.
    Keep pressing 'd' to view more details on results.
+   'D'  key displays records of a table (CAUTION: no safe for long tables)
+   'A'  key attemps to analyze the table, or database
+   'V'  key attemps to vacume  the table, or database
    TBB (or 'l') takes you back to the starting menu.
 
 4. Press 'q' to quit the program

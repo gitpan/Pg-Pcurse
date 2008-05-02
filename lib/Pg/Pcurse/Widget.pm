@@ -9,13 +9,13 @@ use Curses::Widgets::Label;
 use strict;
 use warnings;
 use Pg::Pcurse;
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 
 use base 'Exporter';
 
 our @EXPORT = qw( 
-	          init_screen
+	          init_screen       init_mini_root
 	          create_root
 		  create_commentbox
 	          create_menu
@@ -57,6 +57,22 @@ sub miniscan {
         }
         return $key;
 }
+sub miniscan_5c {
+	noecho();
+        my $mwh = shift;
+        my $key = -1;
+        while ($key eq -1) {
+                $key = $mwh->getch;
+                if($key eq "j")  { return KEY_DOWN    };
+                if($key eq "k")  { return KEY_UP      };
+                if($key eq "h")  { return "\n"        };
+                if($key eq ' ')  { return KEY_DOWN    };
+                if($key eq 'm')  { return KEY_RIGHT   };
+                if($key eq 'n')  { return KEY_LEFT    };
+                if($key eq 'q')  { exit 0             };
+        }
+        return $key;
+}
 
 
 sub _Database_Menu_Choice {
@@ -75,22 +91,29 @@ sub form_dbmenu {
                                 System    => sub { $::hid{system}++} },
                       Mode      =>{ ITEMORDER => [qw( Vacuum   Stats
                                                     Procedures Tables    
-                                                    Views 
+                                                    Views      Users
                                                     Overview   Buffers 
                                                     Indexes   Settings
+                                                    Triggers  Bucardo
                                                   )],
                                 Vacuum     => sub { $::mode = 'vacuum'    },
                                 Stats      => sub { $::mode = 'stats'     },
-                                Procedures => sub { $::mode = 'procedu'   },
+                                Procedures => sub { $::mode = 'procedures'},
                                 Tables     => sub { $::mode = 'tables'    },
                                 Views      => sub { $::mode = 'views'     },
                                 Indexes    => sub { $::mode = 'indexes'   },
                                 Overview   => sub { $::mode = 'overview'  },
                                 Buffers    => sub { $::mode = 'buffers'   },
                                 Settings   => sub { $::mode = 'settings'  },
+                                Bucardo    => sub { $::mode = 'bucardo'   },
+                                Triggers   => sub { $::mode = 'triggers'  },
+                                Users      => sub { $::mode = 'users'     },
 				   },	
-                      About      =>{ ITEMORDER => [ 'Ioannis Tambouras (C)' ],
-                                     'Ioannis Tambouras (C)'=> sub {1} },
+                      About      =>{ ITEMORDER => [  
+                                            "Version $Pg::Pcurse::VERSION",
+                                            'Ioannis Tambouras (C)' 
+                                                  ],
+                                     },
                     };
         new Curses::Widgets::Menu {
                 FOREGROUND  => 'black',
@@ -163,12 +186,19 @@ sub jscan {
         my $key = -1;
         while ($key eq -1) {
                 $key = $mwh->getch;
-                if($key eq 'd') { got_h( $mwh ) }
-                if($key eq 'j')  { return KEY_DOWN};
-                if($key eq 'k')  { return KEY_UP};
-                if($key eq 'h')  { return "\n"  };
-                if($key eq ' ')  { return "\n"  };
-                if($key eq 'q')  { exit 0       };
+                #if($key eq "\e") {
+                        #my $k = $mwh->getch;
+                        #if ($k eq 's') { $::mode = 'stats'; return '\t' };
+                        #$key = $k; }
+                if($key eq 'd')  { got_h( $mwh )  }
+                if($key eq 'D')  { got_D( $mwh )  }
+                if($key eq 'A')  { analyze        }
+                if($key eq 'V')  { vacuum         }
+                if($key eq 'j')  { return KEY_DOWN}
+                if($key eq 'k')  { return KEY_UP  }
+                if($key eq 'h')  { return "\n"    }
+                if($key eq ' ')  { return "\n"    }
+                if($key eq 'q')  { exit 0         }
         }
         return $key;
 }
@@ -248,8 +278,11 @@ sub create_mini_root {
         $mwh->standend();
         $mwh;
 }
-my $sroot      = create_mini_root ( 5,40,3,40);
-my $win_secret = create_mini_root ( 20,81,4,0);
+our ($sroot, $win_secret);
+sub init_mini_root {
+	$sroot      = create_mini_root ( 5,40,3,40);
+	$win_secret = create_mini_root ( 20,81,4,0);
+}
 
 sub got_d {
         my $mwh = shift;
@@ -261,16 +294,33 @@ sub got_d {
 }
 sub got_h {
         my $mwh = shift;
-        my $lb_secret  = listbox5 (18,78,0,0)  or return;
+        my $lb_secret  = listbox5 (18,78,0,0, \&retrieve_context)  or return;
         $lb_secret->draw($win_secret,0);
         $lb_secret->execute($win_secret);
-        $mwh->refresh;
+}
+sub got_D {
+        my $mwh = shift;
+        my $lb_secret  = listbox5_c2 (18,78,0,0, \&capital_context)  or return;
+        $lb_secret->draw($win_secret,0);
+        $lb_secret->execute($win_secret);
+}
+sub display_keyword {
+	my $keyword = shift||return;
+	my ($y,$x)  = (9,1) ;
+	$::mwh->addstr( $y,$x, $keyword);
+	$::mwh->refresh;
+	sleep 1;
+	$::mwh->addstr( $y,$x, ' ' x length$keyword);
+	$::mwh->refresh;
 }
 
+sub got_A { analyze }
+sub got_V { vacuum  }
+sub got_R { reindex };
 
 sub listbox5 {
-        my ( $lines, $cols, $y,$x) = @_;
-	my $content = retrieve_context ( ) or return;
+        my ( $lines, $cols, $y,$x, $fun) = @_;
+	my $content = $fun->() or return;
         new Curses::Widgets::ListBox {
                   Y           => $x||1,
                   X           => $y||3,
@@ -281,14 +331,33 @@ sub listbox5 {
                   INPUTFUNC   => \&miniscan,
                   SELECTEDCOL => 'white',
                   CAPTIONCOL  => 'yellow',
-                  FOCUSSWITCH =>  "\tdl\n",
+                  FOCUSSWITCH =>  "\tdDl\n",
                   BORDER      => 0,
                   FOREGROUND  => 'white',
                   BACKGROUND  => 'blue',
-                  SELECTEDCOL => 'white',
                   VALUE       =>  0,
           };
+}
 
+sub listbox5_c2 {
+        my ( $lines, $cols, $y,$x, $fun) = @_;
+	my $content = $fun->() or return;
+        new Curses::Widgets::ListBox {
+                  Y           => $x||1,
+                  X           => $y||3,
+                  COLUMNS     => $cols||25,
+                  LISTITEMS   => $content,
+                  MULTISEL    => 0,
+                  LINES       => $lines||5,
+                  INPUTFUNC   => \&miniscan_5c,
+                  SELECTEDCOL => 'black',
+                  CAPTIONCOL  => 'yellow',
+                  FOCUSSWITCH =>  "\tdDl\n",
+                  BORDER      => 0,
+                  FOREGROUND  => 'black',
+                  BACKGROUND  => 'magenta',
+                  VALUE       =>  0,
+          };
 }
 
 sub label_sec {

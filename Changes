@@ -1,6 +1,17 @@
 Revision history for Perl extension Pg::Pcurse.
 
-0.04  Man Apr 21 03:52:35 2008
+0.06  Man May  2 05:57:37 2008
+	- Lost of micro-features, here are some:
+	  'd' on schema display shows permissions
+	  'D' on big display shows records
+	  'A' attempts to analyze a table or database
+	  'V' attempts to vacuum a table or database
+	  Bucardo, trigger, and views modes
+	  Always display what mode we are int
+	  Better vacuum submode
+	  Prevent terminal blur on failed startup (invalid db credentials) 
+
+0.05  Man Apr 21 03:52:35 2008
 	- changed the blue screen of 'tables' to statsof()
 	- Fixed module dependacies
 

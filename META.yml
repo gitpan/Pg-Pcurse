@@ -1,16 +1,21 @@
-# http://module-build.sourceforge.net/META-spec.html
-#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
-name:         Pg-Pcurse
-version:      0.05
-version_from: lib/Pg/Pcurse.pm
-installdirs:  site
-requires:
+--- #YAML:1.0
+name:                Pg-Pcurse
+version:             0.06
+abstract:            Monitors a Postgres cluster
+license:             ~
+author:              
+    - Ioannis Tambouras <ioannis@cpan.org>
+generated_by:        ExtUtils::MakeMaker version 6.44
+distribution_type:   module
+requires:     
     Carp::Assert:                  0
     Curses:                        0
     Curses::Widgets:               0
     Data::Dumper:                  0
     DBIx::Abstract:                0
     Getopt::Compact:               0
-
-distribution_type: module
-generated_by: ExtUtils::MakeMaker version 6.30_01
+    Test::Pod:                     1.0
+    Test::Pod::Coverage:           1.0
+meta-spec:
+    url:     http://module-build.sourceforge.net/META-spec-v1.3.html
+    version: 1.3

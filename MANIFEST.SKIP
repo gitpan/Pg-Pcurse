@@ -1,0 +1,4 @@
+lib/Pg/Pcurse/*.pm-
+script/makefile
+script/pg_service.conf
+t/makefile

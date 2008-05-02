@@ -7,21 +7,23 @@ use base 'Exporter';
 use Data::Dumper;
 use strict;
 use warnings;
-our $VERSION = '0.05';
+our $VERSION = '0.06';
+use Pg::Pcurse::Misc;
+use Pg::Pcurse::Query0;
 
 our @EXPORT = qw( 
-	form_dsn       first_word      dbconnect 
-	databases      databases2      tables_vacuum 
-        to_d           get_table       all_settings   
+	tables_vacuum  get_table       all_settings   
         get_proc_desc  get_proc        tables_vacuum2
         get_setting    table_buffers   over_dbs
+        analyze_tbl    analyze_db      vacuum_per_table
+	vacuum_tbl     vacuum_db       
+	reindex_tbl    reindex_db      table_stat
 
-	get_tables2_desc         tables_vacuum_desc 
-        pgbuffercache            proc_of
-	get_nspacl               view_of
-        types2text               rule_of
+	get_tables2_desc         tables_vacuum_desc   
+	bucardo_conf_desc 	 bucardo_conf
+        pgbuffercache            
+	get_nspacl               
 
-        table_stat_desc          table_stat
 	all_databases_desc       all_databases 
 	get_database2_desc       get_database2 
 	get_schemas              get_schemas2 
@@ -31,56 +33,12 @@ our @EXPORT = qw(
 	get_index_desc           get_index 
 	table_stats_desc         table_stats 
 	table_stats2_desc        table_stats2 
-        statsoftable_desc        statsoftable 
         rules_desc               rules
+	schema_trg_desc          schema_trg
+	get_users_desc           get_users
 );
 
 
-sub form_dsn {
-        my ($o, $dbname) = @_;
-	$dbname or $dbname = $o->{dbname};
-        assert( ref$o, 'HASH' );
-        "dbi:Pg:dbname=$dbname;host=$o->{host};port=$o->{port}";
-}
-
-
-sub first_word {
-	split /\s/, $_[0];
-}
-
-sub dbconnect  {
-	my $default = 'dbi:Pg:service=nossl';
-	my ($o, $dsn) = @_ ;
-	$ENV{ PGSYSCONFDIR } = $ENV{ PWD };
-        open STDERR, '>/dev/null';
-	DBIx::Abstract->connect({   dsn  => $dsn || $default,
-	                            driver    => 'Pg',
-				    user      => $o->{user}   || 'ioannis', 
-				    password  => $o->{passwd} || 'silver'
-				},{ PrintWarn => 0, 
-		     	 	    PrintError=> 0, 
-                                    RaiseError=> 1 }
-                                 )
-        or return;
-}
-
-
-#sub database_sources { DBI->data_sources('Pg') }
-sub databases { 
-	map {s/^.*dbname=//;$_}  
-	DBI->data_sources('Pg'); 
-}
-sub databases2 { 
-	my ($o, $database)   = @_;
-	$database or $database = $o->{dbname} ;
-	my $dsn =  form_dsn ($o, $database);
-	my $dh  = dbconnect( $o, $dsn  ) or return;
-        my $st  = $dh->select( 'datname' , 'pg_database');
-	sort 
-        map { sprintf '%s', ${$_}[0] }  
-        @{ $st->fetchall_arrayref} ;
-}
-		
 
 sub all_databases_desc {
           sprintf '%-10s %8s  %8s%8s%8s%10s%12s%8s', 'NAME', 'BENDS','COMMIT',
@@ -105,7 +63,7 @@ sub all_databases {
 }
 
 sub get_database2_desc {
-          sprintf '%-10s%8s', '  ', 'age'
+          sprintf '%-14s%8s', ' ', 'age'
 }
 sub get_database2 {
 #        pg_catalog.pg_encoding_to_char(encoding) as encoding,
@@ -141,9 +99,8 @@ sub get_schemas2 {
                 table=>'pg_namespace,pg_roles',
                 join=>'pg_namespace.nspowner=pg_roles.oid',
                 });
-	[  
-		sort  { $a !~ /^public/}
-		sort  { $a gt $b}
+
+	[  sort schema_sorter 
            map { sprintf '%-20s%-10s', @{$_}[0..1] }  
                @{ $st->fetchall_arrayref}
         ];
@@ -224,15 +181,6 @@ sub get_proc {
 
 sub tables_vacuum_desc {
 	 sprintf '%-22s%22s%22s', 'NAME', 'vacuum', 'analyze'
-}
-sub to_d {
-	$_[0]= '' unless $_[0];
-	return $_[0] unless /^\d/o;
-	s{-}{/}g;
-	s/^(.*:.{2}).*/$1/;
-	chomp;
-	s/^.{2}//;
-	$_[0];
 }
 sub tables_vacuum {
 	my ($o, $database , $schema) = @_;
@@ -356,7 +304,7 @@ sub table_stats2 {
 }
 sub get_table {
 	#TODO it crashes when we dont' have permission to the table
-        return ['needs work'];
+return ['needs work'];
 	my ($o, $database , $schema, $table) = @_;
 	my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
 	my $st = $dh->select('*', "$schema.$table" )  or return;
@@ -390,6 +338,8 @@ sub get_setting {
 	  '',
 	  sprintf( '%-70s', $h->{short_desc}||''),
 	  '',
+#TODO
+	  Curses::Widgets::textwrap($h->{prosrc},30),
         ] 
 } 
 
@@ -429,43 +379,6 @@ sub get_index {
         ]
 
 }
-sub table_stat_desc {
-     sprintf '%-30s%-10s%-10s %-10s %-10s','NAME', 'RELNAME',
-                    'idx_scan', 'idx_tup_read','idx_tup_fetch'
-}
-sub table_stat {
-	my ($o, $database , $schema, $table) = @_;
-	my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
-	(my $st = $dh->{dbh}->prepare( <<""))->execute( $table, $schema);
-	select relname, rolname,  c.oid as coid, relfilenode,
-	       pg_column_size( c.oid )       as col, 
-               relhasoids, age(relfrozenxid) as age,
-	       relpages,
-	       pg_size_pretty( pg_relation_size(c.oid))       as rsize,
-	       pg_size_pretty( pg_total_relation_size(c.oid)) as trsize,
-	       relacl, reloptions
-	from pg_class c join pg_namespace n on (relnamespace= n.oid)
-	     join pg_roles r on ( relowner = r.oid)
-	where relname = ? and nspname = ?
-
-        my $h = $st->fetchrow_hashref  ;
-
-	[ sprintf( '%-14s : %s', 'name' ,        $h->{relname}     ),
-	  sprintf( '%-14s : %s', 'owner',        $h->{rolname}     ),
-	  sprintf( '%-14s : %s', 'oid',          $h->{coid}        ),
-	  sprintf( '%-14s : %s', 'filenode',     $h->{relfilenode} ),
-	  sprintf( '%-14s : %s', 'column size',  $h->{col}         ),
-	  sprintf( '%-14s : %s', 'hasoids',      $h->{relhasoids}  ),
-	  sprintf( '%-14s : %s', 'age',          $h->{age}         ),
-	  sprintf( '%-14s : %s', 'pages',        $h->{relpages}    ),
-	  sprintf( '%-14s : %s', 'pages',        $h->{relpages}    ),
-	  sprintf( '%-14s : %s', 'size',         $h->{rsize}       ),
-	  sprintf( '%-14s : %s', 'total relsize',$h->{trsize}    ),
-	  sprintf( '%-14s : %s', 'acl',      
-                                 $h->{relacl} ? "@{ $h->{relacl} }": ''),
-	  sprintf( '%-14s : %s', 'options',      $h->{reloptions}),
-        ]
-}
 sub over_dbs {
 	my ($o, $database )= @_;
 	my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
@@ -498,141 +411,7 @@ sub over_dbs {
                                  $h->{relacl} ? "@{ $h->{relacl} }": ''),
         ];
 }
-sub statsoftable_desc {
-     sprintf '%-25s%8s%9s%9s%9s%8s%8s','NAME',  'inserts','updates',
-                        'deletes','hot-upd', 'live','dead'
-}
-sub statsoftable {
-        my ($o, $database, $schema, $table )= @_;
-        my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
 
-	my $h  = $dh->select_one_to_hashref([qw(  relname    seq_scan
-                                 seq_tup_read   idx_scan      idx_tup_fetch
-				 n_tup_ins      n_tup_upd     n_tup_del
-                                 n_tup_hot_upd  n_live_tup    n_dead_tup
-                                 last_vacuum    last_autovacuum 
-                                 last_analyze   last_autoanalyze
-                               )],
-                              'pg_stat_user_tables',
-                              [     'schemaname', '=', $dh->quote($schema),
-                                'and', 'relname', '=', $dh->quote($table)]);
-
-	[ sprintf( '%-18s : %s', 'relname' ,      $h->{relname}      ),
-	  sprintf( '%-18s : %s', 'seq_scan',      $h->{seq_scan}     ),
-	  sprintf( '%-18s : %s', 'seq_tup_read',  $h->{seq_tup_read} ),
-	  sprintf( '%-18s : %s', 'idx_scan',      $h->{idx_scan}     ),
-	  sprintf( '%-18s : %s', 'idx_tup_fetch', $h->{idx_tup_fetch}),
-	  sprintf( '%-18s : %s', 'n_tup_ins',     $h->{n_tup_ins}    ),
-	  sprintf( '%-18s : %s', 'n_tup_upd',     $h->{n_tup_upd}    ),
-	  sprintf( '%-18s : %s', 'n_tup_del',     $h->{n_tup_del}    ),
-	  sprintf( '%-18s : %s', 'n_tup_hot_upd', $h->{n_tup_hot_upd}),
-	  sprintf( '%-18s : %s', 'n_live_tup',    $h->{n_live_tup}   ),
-	  sprintf( '%-18s : %s', 'n_dead_tup',    $h->{n_dead_tup}   ),
-	  sprintf( '%-18s : %s', 'last_vacuum',   $h->{last_vacuum}       ),
-	  sprintf( '%-18s : %s', 'last_autovacuum',$h->{last_autovacuum}  ),
-	  sprintf( '%-18s : %s', 'last_analyze',   $h->{last_analyze}     ),
-	  sprintf( '%-18s : %s', 'last_autoanalyze',$h->{last_autoanalyze}),
-        ];
-}
-
-sub one_type {
-        my ($dh, $oid )= @_;
-	my  ($ret) = $dh->select_one_to_array( << "" );
-		pg_catalog.format_type( $oid, $oid )
-
-	$ret;
-}
-
-
-sub types2text {
-	my ($o, $str) = @_;
-        my $dh = dbconnect( $o, form_dsn($o, $o->{dhname}) ) or return;
-	my @oids = split /\s+/, $str||return '';
-	return '' unless @oids;
-	my $ret = '';
-        $ret = $ret . one_type( $dh, $_) .  '   '   for @oids;
-	$ret;
-}
-
-sub proc_of {
-        my ($o, $database, $oid )= @_;
-        my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
-
-        (my $st = $dh->{dbh}->prepare( <<""))->execute( $oid );
-	         select proname  , nspname , rolname as owner,
-                        lanname  , procost , prorows       , proisagg ,
-                        prosecdef, proisstrict , proretset , provolatile , 
-                        pronargs , typname     , proallargtypes, 
-                        proargtypes ,
-                        prosrc   , proargmodes , proargnames, probin ,
-                        proacl   , proconfig   
-		from pg_proc p 
-                     join pg_namespace n on (pronamespace= n.oid)
-		     join pg_language  l on (prolang = l.oid)
-		     join pg_roles     r on (proowner=r.oid)
-		     join pg_type      t on (prorettype=t.oid)
-                where p.oid = ?
-
-
-        my $h             = $st->fetchrow_hashref  ;
-	$h->{proargtypes} = types2text( $o, $h->{proargtypes} );
-
-	[ sprintf( '%-12s : %s', 'name',     $h->{proname}     ),
-          sprintf( '%-12s : %s', 'oid',         $oid              ),
-	  sprintf( '%-12s : %s', 'namespace',$h->{nspname}     ),
-	  sprintf( '%-12s : %s', 'owner',    $h->{owner}       ),
-	  sprintf( '%-12s : %s', 'lang',     $h->{lanname}     ),
-	  sprintf( '%-12s : %s', 'cost',     $h->{procost}     ),
-	  sprintf( '%-12s : %s', 'rows',     $h->{prorows}     ),
-	  sprintf( '%-12s : %s', 'isagg',    $h->{proisagg}    ),
-	  sprintf( '%-12s : %s', 'secdef',   $h->{prosecdef}   ),
-	  sprintf( '%-12s : %s', 'isstrict', $h->{proisstrict} ),
-	  sprintf( '%-12s : %s', 'retset',   $h->{proretset}   ),
-	  sprintf( '%-12s : %s', 'volatile', $h->{provolatile} ),
-	  sprintf( '%-12s : %s', 'nargs',    $h->{pronargs}    ),
-	  sprintf( '%-12s : %s', 'rettype',  $h->{typname}  ),
-	  sprintf( '%-12s : %s', 'argtypes', $h->{proargtypes} ),
-	  sprintf( '%-12s : %s', 'argmodes', $h->{proargmodes} ),
-	  #printf( '%-12s : %s', 'argnames', ($h->{proargnames})
-                             #?  $h->{proargnames}[0] : ''),
-	  #sprintf( '%-12s : %s', 'bin',      $h->{probin}      ),
-	  sprintf( '%-12s : %s', 'config',   $h->{proconfig}   ),
-	  sprintf( '%-12s : %s', 'acl',      $h->{proacl}      ),
-	  sprintf( '%-12s : %s', 'src',      $h->{prosrc}||''  ),
-	]
-}
-sub pgbuffercache_old {
-        my ($o, $database )= @_;
-        my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
-
-	my $user = $dh->quote('postgres');
-        my $h = $dh->select_one_to_hashref( "user = $user as who" );
-
-        return [ q(Must be user "postgres" to view buffer data.) ]
-                     unless $h->{who}; 
-
-        my $v = $dh->quote('pg_buffercache') ;
-
-        $h = $dh->{dbh}->selectrow_array(<<""); 
-	                      select viewname from pg_views
-				where viewname = $v
-
-        return [ q(No public.pg_buffercache in this database.) ]   unless $h;
-
-        (my $st = $dh->{dbh}->prepare( <<""))->execute();
-		select relfilenode::regclass as name, count(1)
-			from pg_buffercache
-			where relfilenode is not null
-			group by 1
-			order by 2 desc
-			;
-
-	my @ret;
-        while( $h = $st->fetchrow_hashref) {
-		push @ret, sprintf('%-35s : %9s', $h->{name}, $h->{count});
-        } 
-	return \@ret;
-}   
       
 sub pgbuffercache {
         my ($o, $database )= @_;
@@ -689,19 +468,6 @@ sub get_views_all {
 	[ sort map { sprintf '%-35s %10s', @{$_}[0..1]}
 	       @{$st->fetchall_arrayref} ];
 }
-sub view_of {
-	my ($o, $database , $schema, $view) = @_;
-
-        $database or $database = $o->{dbname} ;
-	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
-	$view   = $dh->quote($view)  ;
-	$schema = $dh->quote($schema);
-        my $h   = $dh->select_one_to_hashref( 'definition',
-	                                      'pg_views',
-                                             ['schemaname' , '=', $schema, 
-                                              'and viewname','=', $view ]);
-	 $h->{definition} ;
-}
 sub rules_desc {
 	sprintf '%-35s','NAME';
 } 
@@ -716,20 +482,211 @@ sub rules {
 	[ sort map { sprintf '%-35s', ${$_}[0]}
 	       @{$st->fetchall_arrayref} ];
 }
-sub rule_of {
-	my ($o, $database , $schema, $rule) = @_;
+sub max_length_keys {
+	my $max=0;
+	for (@_) {
+		if (length$_ > $max) { $max = length$_};
+	}
+	$max;
+}
+sub  analyze_tbl  {
+	my ($o, $database , $schema, $table) = @_;
         $database or $database = $o->{dbname} ;
 	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
-	$schema = $dh->quote($schema);
-	$rule   = $dh->quote($rule);
-        my $h   = $dh->select_one_to_hashref (  
-                                'definition', 'pg_rules',
-                               ['schemaname', '=', $schema , 
-                                'and', 'rulename', '=', $rule ]) ;
+	eval { $dh->{dbh}->do( "analyze $schema.$table" ); 1 };
+}
 
-	sprintf '%-35s',  $h->{definition} ;
+sub analyze_db   {
+	my ($o, $database ) = @_;
+        $database or $database = $o->{dbname} ;
+	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
+	eval { $dh->{dbh}->do( 'analyze' )  ; 1 }           
+}
+sub  vacuum_tbl  {
+	my ($o, $database , $schema, $table) = @_;
+        $database or $database = $o->{dbname} ;
+	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
+	eval { $dh->{dbh}->do( "vacuum $schema.$table" )  ; 1};
+}
+
+sub vacuum_db   {
+	my ($o, $database ) = @_;
+        $database or $database = $o->{dbname} ;
+	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
+	eval { $dh->{dbh}->do( 'vacuum' )    ; 1};
+}
+sub  reindex_tbl  {
+	my ($o, $database , $schema, $table) = @_;
+        $database or $database = $o->{dbname} ;
+	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
+	eval { $dh->{dbh}->do( "reindex $schema.$table" ); 1};
+}
+
+sub reindex_db   {
+	my ($o, $database ) = @_;
+        $database or $database = $o->{dbname} ;
+	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
+	eval { $dh->{dbh}->do( 'reindex' )    ; 1 };
+}
+sub bucardo_conf_desc {
+	sprintf '%-25s  %s', 'setting', 'value ' ;
+}
+sub bucardo_conf {
+        my $o = shift;
+        my $dh = dbconnect ( $o, form_dsn($o, 'bucardo')  ) or return;
+        my $h  = $dh->{dbh}->selectall_arrayref(<<"");
+		SELECT  setting, value, about, cdate 
+		FROM    bucardo.bucardo_config
+		order by 1
+
+        [ map { sprintf '%-25s  %-31s', @{$_}[0..1] }
+	      @$h ]
+}
+
+sub schema_trg_desc {
+         sprintf '%-25s  %-10s', 'table', 'trigger'
+}
+sub schema_trg {
+        my ($o, $database , $schema) = @_;
+        $database or $database = $o->{dbname} ;
+        my $dh = dbconnect ( $o, form_dsn($o,$database)  ) or return;
+        $schema = $dh->quote($schema);
+        my $h   = $dh->{dbh}->selectall_arrayref(<<"") ;
+		select t.oid, c.relname,  tgname,
+		       tgenabled as enabled
+		from          pg_trigger   t
+			 join pg_class     c  on (c.oid=tgrelid)
+			 join pg_namespace s  on (c.relnamespace=s.oid )
+		where nspname = $schema
+		order by 2 , 3
+
+        [ map { sprintf '%-25s  %-44s %1s %30s', @{$_}[1..3,0] }
+	      @$h 
+       ]
+
+}
+
+sub get_users_desc {
+        sprintf '%-6s', 'users';
+}
+
+sub get_users {
+        my ($o, $database) = @_;
+        $database or $database = $o->{dbname} ;
+        my $dh = dbconnect ( $o, form_dsn($o,$database)  ) or return;
+        my $h   = $dh->{dbh}->selectall_arrayref(<<"") ;
+	select usename,
+		case when(usesuper) then 'super' else ''  end as superuser,
+		case when(usecatupd) then 'catupd' else ''   end as catupd,
+		case when(usecreatedb) then 'createdb' else '' end as createdb
+	from pg_user
+	order by 2 desc,1
+
+        [ map { sprintf '%-20s  %-7s %-7s %-s', @{$_}[0..3] }
+	      @$h 
+       ]
+
+}
+
+sub table_stat {
+	my ($o, $database , $schema, $table) = @_;
+	my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+	(my $st = $dh->{dbh}->prepare( <<""))->execute( $table, $schema);
+	select 
+		relnamespace, reltype       , relam         , reltablespace ,
+		reltuples   , reltoastrelid , reltoastidxid , relhasindex   ,
+		relisshared , relkind       , relnatts      , relchecks     ,
+		reltriggers , relukeys      , relfkeys      , relrefs       ,
+		relhasoids  , relhaspkey    , relhasrules   , relhassubclass,
+	        relname, rolname,  c.oid as coid, relfilenode,
+	        pg_column_size( c.oid )       as col, 
+                relhasoids, relfrozenxid, age(relfrozenxid) as age,
+	        relpages,
+	        pg_size_pretty( pg_relation_size(c.oid))       as rsize,
+	        pg_size_pretty( pg_total_relation_size(c.oid)) as trsize,
+	        relacl, reloptions
+	from pg_class c join pg_namespace n on (relnamespace= n.oid)
+	     join pg_roles r on ( relowner = r.oid)
+	where relname = ? and nspname = ?
+
+        my $h = $st->fetchrow_hashref  ;
+
+	[ sprintf( '%-14s : %s', 'name' ,        $h->{relname}     ),
+	  sprintf( '%-14s : %s', 'owner',        $h->{rolname}     ),
+	  sprintf( '%-14s : %s', 'age',          $h->{age}         ),
+	  sprintf( '%-14s : %s', 'frozenxid',    $h->{relfrozenxid}),
+	  sprintf( '%-14s : %s', 'pages',        $h->{relpages}    ),
+	  sprintf( '%-14s : %s', 'size',         $h->{rsize}       ),
+	  sprintf( '%-14s : %s', 'total relsize',$h->{trsize}      ),
+	  sprintf( '%-14s : %s', 'acl',      
+                                 $h->{relacl} ? "@{ $h->{relacl} }": ''),
+	  sprintf( '%-14s : %s', 'est. tuples',  $h->{reltuples}     ),
+	  sprintf( '%-14s : %s', 'toastrelid' ,  $h->{reltoastrelid} ),
+	  sprintf( '%-14s : %s', 'hasindex'   ,  $h->{relhasindex}   ),
+	  sprintf( '%-14s : %s', 'isshared'   ,  $h->{relisshared}   ),
+	  sprintf( '%-14s : %s', 'natts'      ,  $h->{relnatts}      ),
+	  sprintf( '%-14s : %s', 'checks'     ,  $h->{relchecks}     ),
+	  sprintf( '%-14s : %s', 'triggers'   ,  $h->{reltriggers}   ),
+	  sprintf( '%-14s : %s', 'ukeys'      ,  $h->{relukeys}      ),
+	  sprintf( '%-14s : %s', 'fkeys'      ,  $h->{relfkeys}      ),
+	  sprintf( '%-14s : %s', 'refs'       ,  $h->{relrefs}       ),
+	  sprintf( '%-14s : %s', 'hasoids'    ,  $h->{relhasoids}    ),
+	  sprintf( '%-14s : %s', 'haspkey'    ,  $h->{relhaspkey}    ),
+	  sprintf( '%-14s : %s', 'hasrules'   ,  $h->{relhasrules}   ),
+	  sprintf( '%-14s : %s', 'hassubclass',  $h->{relhassubclass}),
+	  sprintf( '%-14s : %s', 'options',      $h->{reloptions}),
+	  sprintf( '%-14s : %s', 'oid',          $h->{coid}        ),
+	  sprintf( '%-14s : %s', 'filenode',     $h->{relfilenode} ),
+	  sprintf( '%-14s : %s', 'column size',  $h->{col}         ),
+	  sprintf( '%-14s : %s', 'hasoids',      $h->{relhasoids}  ),
+        ]
+        #relnamespace reltype relam reltablespace reltoastidxid relkind        
+}
+sub vacuum_per_table { 
+	my ($o, $database , $schema, $table) = @_;
+	my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+        my $h  = $dh->select_one_to_hashref(
+                      [ 'vacrelid::regclass::text as name' , qw(
+                        enabled  vac_base_thresh  vac_scale_factor 
+			anl_base_thresh   anl_scale_factor   vac_cost_delay  
+			vac_cost_limit   freeze_min_age   freeze_max_age
+                      )], 'pg_autovacuum, pg_namespace',
+                      ['vacrelid::regclass::text', '=', $dh->quote($table) ,
+                        'and', 'nspname', '=', $dh->quote($schema)
+                      ]);
+        my $r =
+        [ sprintf( '%-18s : %s', 'relname'          , $table                 ),
+          '',                                                   
+          sprintf( '%-18s : %s', 'enabled'          , $h->{enabled}          ),
+          sprintf( '%-18s : %s', 'vac_base_thresh'  , $h->{vac_base_thresh}  ),
+          sprintf( '%-18s : %s', 'vac_scale_factor' , $h->{vac_scale_factor} ),
+          sprintf( '%-18s : %s', 'anl_base_thresh'  , $h->{anl_base_thresh}  ),
+          sprintf( '%-18s : %s', 'anl_scale_factor' , $h->{anl_scale_factor} ),
+          sprintf( '%-18s : %s', 'vac_cost_delay'   , $h->{vac_cost_delay}   ),
+          sprintf( '%-18s : %s', 'vac_cost_limit'   , $h->{vac_cost_limit}   ),
+          sprintf( '%-18s : %s', 'freeze_min_age'   , $h->{freeze_min_age}   ),
+          sprintf( '%-18s : %s', 'freeze_max_age'   , $h->{freeze_max_age}   ),
+	];
+        $h  = $dh->select_one_to_hashref( 
+                      [qw( n_dead_tup 
+                           last_vacuum     last_autovacuum  
+			   last_analyze    last_autoanalyze
+                      )], 'pg_stat_all_tables, pg_namespace',
+                      ['relid::regclass::text', '=', $dh->quote($table) ,
+                              'and', 'nspname', '=', $dh->quote($schema)
+                      ]);
+
+        my $r2 =
+        [ sprintf( '%-18s : %s', 'relname'          , $table                 ),
+          '',                                            
+          sprintf( '%-18s : %s', 'n_dead_tup'       , $h->{n_dead_tup}       ),
+          sprintf( '%-18s : %s', 'last_vacuum'      , $h->{last_vacuum}      ),
+          sprintf( '%-18s : %s', 'last_autovacuum'  , $h->{last_autovacuum}  ),
+          sprintf( '%-18s : %s', 'last_analyze'     , $h->{last_analyze}     ),
+          sprintf( '%-18s : %s', 'last_autoanalyse' , $h->{last_autoanalyze} ),
+	];
+	[@$r, @$r2];
 }
 
 1;
 __END__
-	  sprintf( '%-14s : %s', 'acl',      
