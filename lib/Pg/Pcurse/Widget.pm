@@ -82,6 +82,10 @@ sub _Database_Menu_Choice {
         $ret->{ITEMORDER} = $dbs ;
         $ret;
 }
+
+my @MODES = sort qw( Vacuum Stats Procedures Tables Views Users 
+                     Databases Buffers Indexes Settings Triggers Bucardo
+             );
 sub form_dbmenu {
         my $dbs = shift;
 	assert( ref $dbs, 'ARRAY') if DEBUG;
@@ -89,25 +93,19 @@ sub form_dbmenu {
                       Databases => _Database_Menu_Choice ($dbs),
                       Hide      =>{ ITEMORDER => [ 'System' ],
                                 System    => sub { $::hid{system}++} },
-                      Mode      =>{ ITEMORDER => [qw( Vacuum   Stats
-                                                    Procedures Tables    
-                                                    Views      Users
-                                                    Overview   Buffers 
-                                                    Indexes   Settings
-                                                    Triggers  Bucardo
-                                                  )],
+                      Mode      =>{ ITEMORDER => [ @MODES ],
                                 Vacuum     => sub { $::mode = 'vacuum'    },
                                 Stats      => sub { $::mode = 'stats'     },
                                 Procedures => sub { $::mode = 'procedures'},
                                 Tables     => sub { $::mode = 'tables'    },
                                 Views      => sub { $::mode = 'views'     },
-                                Indexes    => sub { $::mode = 'indexes'   },
-                                Overview   => sub { $::mode = 'overview'  },
-                                Buffers    => sub { $::mode = 'buffers'   },
-                                Settings   => sub { $::mode = 'settings'  },
-                                Bucardo    => sub { $::mode = 'bucardo'   },
-                                Triggers   => sub { $::mode = 'triggers'  },
                                 Users      => sub { $::mode = 'users'     },
+                                Databases  => sub { $::mode = 'databases' },
+                                Buffers    => sub { $::mode = 'buffers'   },
+                                Indexes    => sub { $::mode = 'indexes'   },
+                                Settings   => sub { $::mode = 'settings'  },
+                                Triggers   => sub { $::mode = 'triggers'  },
+                                Bucardo    => sub { $::mode = 'bucardo'   },
 				   },	
                       About      =>{ ITEMORDER => [  
                                             "Version $Pg::Pcurse::VERSION",

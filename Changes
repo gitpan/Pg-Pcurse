@@ -1,5 +1,11 @@
 Revision history for Perl extension Pg::Pcurse.
 
+0.07  Man May  2 06:31:03 2008
+	- Renamed mode 'overview' to 'databases'
+	- Fixed calculation of row sizes 
+	- Added more fields to 'd' tables
+	- Display updates after analyze & vacuum 
+
 0.06  Man May  2 05:57:37 2008
 	- Lost of micro-features, here are some:
 	  'd' on schema display shows permissions

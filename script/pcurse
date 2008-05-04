@@ -12,6 +12,7 @@ use warnings;
 use Pg::Pcurse::Misc;
 use Pg::Pcurse::Query0;
 use Pg::Pcurse::Query1;
+use Pg::Pcurse::Query2;
 
 *addstr = \&Curses::Widgets::addstr;
 
@@ -21,10 +22,12 @@ if ($opt->{h}) { print $opt->usage  ; init_screen; endwin; exit(0) }
 $opt = process_options($opt->opts);
 
 
+
 =begin a
 
 #my $tab = tables_brief ($opt, 'bucardo', 'pg_toast' );
-my $tab  = vacuum_per_table( $opt, 'people', 'public', 'person');
+#my $tab  = over_dbs( $opt, 'devhip');
+my $tab  = all_databases( $opt, 'devhip');
 
 print Dumper $tab;
 print 'done';
@@ -45,6 +48,7 @@ $::mwh  = create_root;
 my $dbs  = [ databases2 $opt ];
 my $main = form_dbmenu ($dbs);
 $::mode='vacuum';
+$::mode='databases';
 $::mode='tables';
 
 init_mini_root;
@@ -57,10 +61,12 @@ while(2) {
         $::dbname  = $main::db || $opt->{dbname} || $dbs->[0] || 'template1';
 
 	# display database name
-        $::mwh->addstr(6,14, get_database2_desc);
-        my ($dbstr) = get_database2( $opt, $::dbname );
-        $::mwh->addstr(5,10, sprintf 'Mode  = %-13s', ucfirst$::mode   );
-        $::mwh->addstr(7,10, sprintf 'DBase = %-8s', $dbstr    );
+        $::mwh->addstr(5,10, sprintf 'Mode  : %-13s', ' '   );
+        $::mwh->addstr(6,10, sprintf 'DBase : %-13s' , ' '   );
+        $::mwh->addstr(5,10, sprintf 'Mode  : %-13s', ucfirst$::mode );
+        $::mwh->addstr(6,10, sprintf 'DBase : %-8s', $::dbname       );
+        $::mwh->addstr(7,10, sprintf 'User  : %-8s', $opt->{user}    );
+        $::mwh->addstr(8,10, sprintf 'Host  : %-8s', $opt->{host}    );
 	$main->draw($::mwh,0);
 
 	# act according to ::mode

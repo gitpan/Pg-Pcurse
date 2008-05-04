@@ -22,7 +22,7 @@ use Pg::Pcurse::Query1;
 use Pg::Pcurse::Query2;
 use Pg::Pcurse::Query3;
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 our $opt;
 
@@ -42,19 +42,19 @@ our @EXPORT = qw(
 sub execute_mode {
         my $mode = shift;
         ({  
-	    tables     =>  sub { show_tables()    },
-	    views      =>  sub { show_views()     },
-            overview   =>  sub { show_overview()  },
-            vacuum     =>  sub { show_vacuum()    },
-            stats      =>  sub { show_stats()     },
-            buffers    =>  sub { show_buffers()   },
-            indexes    =>  sub { show_indexes()   },
-            procedures =>  sub { show_procedu()   },
-            rules      =>  sub { show_rules()     },
-            settings   =>  sub { show_settings()  },
-            bucardo    =>  sub { show_bucardo()   },
-            triggers   =>  sub { show_triggers()  },
-            users      =>  sub { show_users()     },
+	    tables     =>  \& show_tables      ,
+	    views      =>  \& show_views       ,
+            databases  =>  \& show_databases   ,
+            vacuum     =>  \& show_vacuum      ,
+            stats      =>  \& show_stats       ,
+            buffers    =>  \& show_buffers     ,
+            indexes    =>  \& show_indexes     ,
+            procedures =>  \& show_procedu     ,
+            rules      =>  \& show_rules       ,
+            settings   =>  \& show_settings    ,
+            bucardo    =>  \& show_bucardo     ,
+            triggers   =>  \& show_triggers    ,
+            users      =>  \& show_users       ,
          } -> {$mode})->();
 }
 
@@ -65,7 +65,7 @@ sub first_cinema {
         $::big   =   big_listbox( $desc, $::tab, 11, 0);
         $::big->execute($::mwh,0);
 }
-sub show_overview { first_cinema( all_databases_desc() , \& all_databases )}
+sub show_databases{ first_cinema( all_databases_desc() , \& all_databases )}
 sub show_settings { first_cinema( '', \& all_settings  )}
 sub show_buffers  { first_cinema( '', \& table_buffers )} 
 sub show_bucardo  { first_cinema( bucardo_conf_desc(), \& bucardo_conf)} 
@@ -76,9 +76,7 @@ sub update_schema_display {
         #  Schema Table
         $::she     = get_schemas2( $opt, $::dbname) or return;
         $::schemas = secondary_listbox('Schemas', $::she, 2,37);
-        $::schemas->draw($::mwh,0);
         $::schemas->execute($::mwh,0);
-        $::schemas->draw($::mwh,0);
 }
 
 sub update_big_display {
@@ -94,6 +92,7 @@ sub same_movie {
 	update_schema_display;
 	update_big_display;
 }
+
 
 sub show_stats   { same_movie( \&table_stats_desc, \&table_stats       )  }
 sub show_vacuum  { same_movie( \&tables_vacuum_desc, \&tables_vacuum   )  }
@@ -122,9 +121,8 @@ sub retrieve_context {
 	    tables     => \& tstat    ,
 	   #tables     => \& statsof  ,
             views      => \& viewof   ,
-           #vacuum     => \& vacuum2  ,
             vacuum     => \& vacuumof ,
-            overview   => \& over2    ,
+            databases  => \& over2    ,
             stats      => \& statsof  ,
             settings   => \& settingof,
             procedures => \& procof   ,
@@ -172,7 +170,7 @@ sub ruleof {
 
 sub over2  { 
         my $index = $::big->getField('VALUE');
-        my ($f) = first_word( $::tab->[$index] );
+        my ($f)   = first_word( $::tab->[$index] );
         over_dbs( $opt, $f) ;
 } 
 sub bucardoof  { 
@@ -263,36 +261,41 @@ sub display_keyword {
         $::mwh->refresh;
 }
 sub update_big_d {
-        # Result Table ( like relevant tables, indexes, objects, etc,. )
-        ($::sname) = first_word( $::she->[ $::schemas->getField('VALUE')] );
-        #$::desc    = $::desc->();
-        $::tab     = $::actual->( $opt, $::dbname, $::sname);
-        $::big     = big_listbox( $::desc, $::tab, 11, 0);
-        $::big->execute($::mwh,0);
+        $::tab     = tables_brief( $opt, $::dbname, $::sname);
+	$::big->setField( LISTITEMS => $::tab );
 }
 
+sub update_bigbox_inc {
+        $::tab = ({ tables    => \& tables_brief,
+                    stats     => \& table_stats,
+                    databases => \& all_databases,
+                 } -> {$::mode})->($opt, $::dbname, $::sname);
+	$::big->setField( LISTITEMS => $::tab );
+}
 sub analyze  {
-        return unless $::mode =~ qr/^(tables|stats|overview)/o;
+        return unless $::mode =~ qr/^(tables|stats|databases)/o;
         ({ tables    => \&do_analyze_tbl,
            stats     => \&do_analyze_tbl,
-           overview  => \&do_analyze_db,
+           databases => \&do_analyze_db,
         } -> {$::mode})->() ? display_keyword 'ANALYZE'
                             : display_keyword 'failed';
-        #update_big_d;
+	update_bigbox_inc ;
 }
+
 sub vacuum  {
-        return unless $::mode =~ qr/^(tables|stats|overview)/o;
-        ({ tables    => \&do_vacuum_tbl,
-           stats     => \&do_vacuum_tbl,
-           overview  => \&do_vacuum_db,
+        return unless $::mode =~ qr/^(tables|stats|databases)/o;
+        ({ tables    => \& do_vacuum_tbl,
+           stats     => \& do_vacuum_tbl,
+           databases => \& do_vacuum_db,
         } -> {$::mode})->() ? display_keyword 'VACUUM' 
                             : display_keyword 'failed' ;
+	update_bigbox_inc ;
 }
 
 sub reindex  {
 	return unless $::mode eq 'indexes';
         ({  tables     => \& do_reindex_tbl ,
-            overview   => \& do_reindex_db  ,
+            databases  => \& do_reindex_db  ,
         }->{$::mode||return})->(@_) ? display_keyword 'REINDEX' 
                                     : display_keyword 'failed' ;
 }

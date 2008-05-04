@@ -7,7 +7,7 @@ use base 'Exporter';
 use Data::Dumper;
 use strict;
 use warnings;
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 use Pg::Pcurse::Misc;
 use Pg::Pcurse::Query0;
 
@@ -25,7 +25,6 @@ our @EXPORT = qw(
 	get_nspacl               
 
 	all_databases_desc       all_databases 
-	get_database2_desc       get_database2 
 	get_schemas              get_schemas2 
 	get_tables_all_desc      get_tables_all
 	get_views_all_desc       get_views_all
@@ -40,48 +39,6 @@ our @EXPORT = qw(
 
 
 
-sub all_databases_desc {
-          sprintf '%-10s %8s  %8s%8s%8s%10s%12s%8s', 'NAME', 'BENDS','COMMIT',
-                              'ROLL','READ','HIT', 'AGE', '';
-}
-sub all_databases {
-	my $o = shift;
-	my $dsn =  form_dsn ($o, '');
-	my $dh  = dbconnect( $o, $dsn  ) or return;
-        my $st  = $dh->select({
-                fields=> [qw( pg_database.datname numbackends 
-                              xact_commit         xact_rollback
-                              blks_read           blks_hit 
-                              age(datfrozenxid)
-                              pg_catalog.pg_encoding_to_char(encoding) 
-                          )],
-                table=>'pg_stat_database,pg_database',
-                join=>'pg_stat_database.datname=pg_database.datname',
-                });
-       [ sort map { sprintf '%-10s%9s%10s%7s%9s%12s%10s  %-15s', @{$_}[0..7] }  
-               @{ $st->fetchall_arrayref} ];
-}
-
-sub get_database2_desc {
-          sprintf '%-14s%8s', ' ', 'age'
-}
-sub get_database2 {
-#        pg_catalog.pg_encoding_to_char(encoding) as encoding,
-	my ($o, $database)   = @_;
-	$database or $database = $o->{dbname} ;
-	my $dsn =  form_dsn ($o, $database);
-	my $dh  = dbconnect( $o, $dsn  ) or return;
-        my $st  = $dh->select({
-                fields=> [qw( datname   rolname  datistemplate  datallowconn 
-                              datconnlimit age(datfrozenxid)
-                          )],
-                table=>'pg_database,pg_roles',
-                join=>'pg_database.datdba=pg_roles.oid',
-                where  =>  ['datname', '=', $dh->quote($database) ]
-                });
-          map { sprintf '%-10s%8s', @{$_}[0,5] }  
-               @{ $st->fetchall_arrayref};
-}
 sub get_schemas {
 	my $database = shift;
 	my $dh = dbconnect ( 'dbi:Pg:dbname='. $database  ) or return;
@@ -379,39 +336,6 @@ sub get_index {
         ]
 
 }
-sub over_dbs {
-	my ($o, $database )= @_;
-	my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
-	$database = $dh->quote( $database );
-        my $st = $dh->select({
-                fields => [qw( datname       rolname       encoding  
-                              datistemplate  datallowconn  datconnlimit   
-                              datlastsysoid  age(datfrozenxid)
-                              dattablespace  datconfig     datacl
-                              pg_size_pretty(pg_database_size(datname))
-                         )],
-                table =>'pg_database,pg_roles',
-                join  =>'pg_database.datdba=pg_roles.oid',
-                where => ['datname', '=', $database] });
-
-        my $h = $st->fetchrow_hashref  ;
-
-	[ sprintf( '%-15s : %s', 'datname' ,   $h->{datname}       ),
-	  sprintf( '%-15s : %s', 'rolname',    $h->{rolname}       ),
-	  sprintf( '%-15s : %s', 'encoding',   $h->{encoding}      ),
-	  sprintf( '%-15s : %s', 'istemplate', $h->{datistemplate} ),
-	  sprintf( '%-15s : %s', 'allowconn',  $h->{datallowconn}  ),
-	  sprintf( '%-15s : %s', 'connlimit',  $h->{datconnlimit}  ),
-	  sprintf( '%-15s : %s', 'lastsysoid', $h->{datlastsysoid} ),
-	  sprintf( '%-15s : %s', 'tablespace', $h->{dattablespace} ),
-	  sprintf( '%-15s : %s', 'Size',       $h->{pg_size_pretty} ),
-	  sprintf( '%-15s : %s', 'config',      
-                                 $h->{datconfig} ? "@{ $h->{datconfig} }": ''),
-	  sprintf( '%-15s : %s', 'relacl',      
-                                 $h->{relacl} ? "@{ $h->{relacl} }": ''),
-        ];
-}
-
       
 sub pgbuffercache {
         my ($o, $database )= @_;
@@ -506,7 +430,7 @@ sub  vacuum_tbl  {
 	my ($o, $database , $schema, $table) = @_;
         $database or $database = $o->{dbname} ;
 	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
-	eval { $dh->{dbh}->do( "vacuum $schema.$table" )  ; 1};
+	eval { $dh->{dbh}->do( "vacuum ${schema}.${table}" )  ; 1};
 }
 
 sub vacuum_db   {
@@ -588,60 +512,6 @@ sub get_users {
 
 }
 
-sub table_stat {
-	my ($o, $database , $schema, $table) = @_;
-	my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
-	(my $st = $dh->{dbh}->prepare( <<""))->execute( $table, $schema);
-	select 
-		relnamespace, reltype       , relam         , reltablespace ,
-		reltuples   , reltoastrelid , reltoastidxid , relhasindex   ,
-		relisshared , relkind       , relnatts      , relchecks     ,
-		reltriggers , relukeys      , relfkeys      , relrefs       ,
-		relhasoids  , relhaspkey    , relhasrules   , relhassubclass,
-	        relname, rolname,  c.oid as coid, relfilenode,
-	        pg_column_size( c.oid )       as col, 
-                relhasoids, relfrozenxid, age(relfrozenxid) as age,
-	        relpages,
-	        pg_size_pretty( pg_relation_size(c.oid))       as rsize,
-	        pg_size_pretty( pg_total_relation_size(c.oid)) as trsize,
-	        relacl, reloptions
-	from pg_class c join pg_namespace n on (relnamespace= n.oid)
-	     join pg_roles r on ( relowner = r.oid)
-	where relname = ? and nspname = ?
-
-        my $h = $st->fetchrow_hashref  ;
-
-	[ sprintf( '%-14s : %s', 'name' ,        $h->{relname}     ),
-	  sprintf( '%-14s : %s', 'owner',        $h->{rolname}     ),
-	  sprintf( '%-14s : %s', 'age',          $h->{age}         ),
-	  sprintf( '%-14s : %s', 'frozenxid',    $h->{relfrozenxid}),
-	  sprintf( '%-14s : %s', 'pages',        $h->{relpages}    ),
-	  sprintf( '%-14s : %s', 'size',         $h->{rsize}       ),
-	  sprintf( '%-14s : %s', 'total relsize',$h->{trsize}      ),
-	  sprintf( '%-14s : %s', 'acl',      
-                                 $h->{relacl} ? "@{ $h->{relacl} }": ''),
-	  sprintf( '%-14s : %s', 'est. tuples',  $h->{reltuples}     ),
-	  sprintf( '%-14s : %s', 'toastrelid' ,  $h->{reltoastrelid} ),
-	  sprintf( '%-14s : %s', 'hasindex'   ,  $h->{relhasindex}   ),
-	  sprintf( '%-14s : %s', 'isshared'   ,  $h->{relisshared}   ),
-	  sprintf( '%-14s : %s', 'natts'      ,  $h->{relnatts}      ),
-	  sprintf( '%-14s : %s', 'checks'     ,  $h->{relchecks}     ),
-	  sprintf( '%-14s : %s', 'triggers'   ,  $h->{reltriggers}   ),
-	  sprintf( '%-14s : %s', 'ukeys'      ,  $h->{relukeys}      ),
-	  sprintf( '%-14s : %s', 'fkeys'      ,  $h->{relfkeys}      ),
-	  sprintf( '%-14s : %s', 'refs'       ,  $h->{relrefs}       ),
-	  sprintf( '%-14s : %s', 'hasoids'    ,  $h->{relhasoids}    ),
-	  sprintf( '%-14s : %s', 'haspkey'    ,  $h->{relhaspkey}    ),
-	  sprintf( '%-14s : %s', 'hasrules'   ,  $h->{relhasrules}   ),
-	  sprintf( '%-14s : %s', 'hassubclass',  $h->{relhassubclass}),
-	  sprintf( '%-14s : %s', 'options',      $h->{reloptions}),
-	  sprintf( '%-14s : %s', 'oid',          $h->{coid}        ),
-	  sprintf( '%-14s : %s', 'filenode',     $h->{relfilenode} ),
-	  sprintf( '%-14s : %s', 'column size',  $h->{col}         ),
-	  sprintf( '%-14s : %s', 'hasoids',      $h->{relhasoids}  ),
-        ]
-        #relnamespace reltype relam reltablespace reltoastidxid relkind        
-}
 sub vacuum_per_table { 
 	my ($o, $database , $schema, $table) = @_;
 	my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
@@ -686,6 +556,159 @@ sub vacuum_per_table {
           sprintf( '%-18s : %s', 'last_autoanalyse' , $h->{last_autoanalyze} ),
 	];
 	[@$r, @$r2];
+}
+sub over_dbs {
+	my ($o, $database )= @_;
+	my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+        my $h  = $dh->select_one_to_hashref( {
+                      fields=> ['pg_database.datname',
+			        'pg_get_userbyid(datdba) as dba',
+				'pg_encoding_to_char(encoding) as encoding',
+			         qw( datistemplate  datallowconn  datconnlimit 
+			             datlastsysoid  datfrozenxid  dattablespace
+                                     datconfig      datacl        blks_read
+                                     blks_hit       xact_commit   xact_rollback
+				     tup_returned   tup_fetched   tup_inserted
+				     tup_updated    tup_deleted
+                                 ), 'age(datfrozenxid)',
+	      'pg_size_pretty( pg_database_size(pg_database.datname)) as size',
+                                ],
+                      table => 'pg_database,pg_stat_database',
+		      join  => 'pg_database.datname=pg_stat_database.datname',
+		      where => ['pg_database.datname', 
+                                '=', $dh->quote($database)] 
+                       });
+
+        [ sprintf( '%-18s : %s', 'database'      , $h->{datname}        ),
+          sprintf( '%-18s : %s', 'dba'           , $h->{dba}            ),
+          sprintf( '%-18s : %s', 'encoding'      , $h->{encoding}  ),
+          sprintf( '%-18s : %s', 'istemplate'    , $h->{datistemplate}  ),
+          sprintf( '%-18s : %s', 'allowconn'     , $h->{datallowconn}   ),
+          sprintf( '%-18s : %s', 'connlimit'     , $h->{datconnlimit}   ),
+          sprintf( '%-18s : %s', 'lastsysoid'    , $h->{datlastsysoid}  ),
+          sprintf( '%-18s : %s', 'frozenxid'     , $h->{datfrozenxid}   ),
+          sprintf( '%-18s : %s', 'age'           , $h->{age}            ),
+          sprintf( '%-18s : %s', 'tablespace'    , $h->{dattablespace}  ),
+          sprintf( '%-18s : %s', 'config'        , $h->{datconfig}
+                                                   &&"@{$h->{datconfig}}" ),
+          sprintf( '%-18s : %s', 'acl', $h->{datacl} && "@{$h->{datacl}}" ),
+          sprintf( '%-18s : %s', 'blks_read'     , $h->{blks_read}        ),
+          sprintf( '%-18s : %s', 'blks_hit'      , $h->{blks_hit}         ),
+          sprintf( '%-18s : %s', '% read/hit'      , 
+                   calc_read_ratio( @{$h}{'blks_read','blks_hit'} )),
+          sprintf( '%-18s : %s', 'xact_commit'   , $h->{xact_commit}    ),
+          sprintf( '%-18s : %s', 'xact_rollback' , $h->{xact_rollback}  ),
+          sprintf( '%-18s : %s', 'pg_size'       , $h->{size}           ),
+          sprintf( '%-18s : %s', 'tup_returned'  , $h->{tup_returned}   ),
+          sprintf( '%-18s : %s', 'tup_fetched'   , $h->{tup_fetched}    ),
+          sprintf( '%-18s : %s', 'tup_inserted'  , $h->{tup_inserted}   ),
+          sprintf( '%-18s : %s', 'tup_updated'   , $h->{tup_updated}    ),
+          sprintf( '%-18s : %s', 'tup_deleted'   , $h->{tup_deleted}    ),
+        ]
+}
+sub calc_read_ratio {
+	my ($read,$hit) = @_ ;
+	return 'infinite' unless $hit;
+ 	sprintf '%.4f', (100*$read/$hit) ;
+}
+
+sub table_stat {
+	my ($o, $database , $schema, $table) = @_;
+	my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+	my $h = $dh->select_one_to_hashref({
+	   fields => [qw(     relname         relfrozenxid
+                relnamespace  reltype         relam           reltablespace
+                reltuples     reltoastrelid   reltoastidxid   relhasindex  
+                relisshared   relkind         relnatts        relchecks    
+                reltriggers   relukeys        relfkeys        relrefs       
+                relhasoids    relhaspkey      relhasrules     relhassubclass
+                relname       relfilenode     relpages        relacl  reloptions
+                     ), 'pg_get_userbyid(relowner) as owner',
+			'pg_class.oid as coid',
+			'age(relfrozenxid)',
+	                'pg_size_pretty(pg_relation_size(pg_class.oid)) as rsi',
+	     'pg_size_pretty( pg_total_relation_size(pg_class.oid)) as trsize',
+                      ],
+	   table  => 'pg_class,pg_namespace',
+	   join   => 'pg_class.relnamespace=pg_namespace.oid',
+           where  => [        'relname',  '=' ,  $dh->quote($table),
+                       'and', 'nspname',  '=' ,  $dh->quote($schema),
+                          ]}); 
+
+	my $r1 =
+	[ sprintf( '%-14s : %s', 'name' ,        $h->{relname}       ),
+	  sprintf( '%-14s : %s', 'owner',        $h->{owner}         ),
+	  sprintf( '%-14s : %s', 'natts'      ,  $h->{relnatts}      ),
+	  sprintf( '%-14s : %s', 'pages',        $h->{relpages}      ),
+	  sprintf( '%-14s : %s', 'size',         $h->{rsi}           ),
+	  sprintf( '%-14s : %s', 'total relsize',$h->{trsize}        ),
+	  sprintf( '%-14s : %s', 'acl',      
+                               $h->{relacl} ? "@{ $h->{relacl} }": ''),
+	  sprintf( '%-14s : %s', 'est. tuples',  $h->{reltuples}     ),
+	  sprintf( '%-14s : %s', 'haspkey'    ,  $h->{relhaspkey}    ),
+	  sprintf( '%-14s : %s', 'fkeys'      ,  $h->{relfkeys}      ),
+	  sprintf( '%-14s : %s', 'hasindex'   ,  $h->{relhasindex}   ),
+	  sprintf( '%-14s : %s', 'hasrules'   ,  $h->{relhasrules}   ),
+	  sprintf( '%-14s : %s', 'triggers'   ,  $h->{reltriggers}   ),
+	  sprintf( '%-14s : %s', 'ukeys'      ,  $h->{relukeys}      ),
+	  sprintf( '%-14s : %s', 'refs'       ,  $h->{relrefs}       ),
+	  sprintf( '%-14s : %s', 'hassubclass',  $h->{relhassubclass}),
+	  sprintf( '%-14s : %s', 'checks'     ,  $h->{relchecks}     ),
+	  sprintf( '%-14s : %s', 'options',      $h->{reloptions}),
+	  sprintf( '%-14s : %s', 'oid',          $h->{coid}        ),
+	  sprintf( '%-14s : %s', 'isshared'   ,  $h->{relisshared}   ),
+	  sprintf( '%-14s : %s', 'filenode',     $h->{relfilenode} ),
+	  sprintf( '%-14s : %s', 'toastrelid' ,  $h->{reltoastrelid} ),
+	  sprintf( '%-14s : %s', 'hasoids',      $h->{relhasoids}  ),
+	  sprintf( '%-14s : %s', 'frozenxid',    $h->{relfrozenxid}  ),
+	  sprintf( '%-14s : %s', 'age',          $h->{age}           ),
+	];
+        #relnamespace reltype relam reltablespace reltoastidxid relkind        
+        $h = $dh->select_one_to_hashref(
+                       [qw(  n_dead_tup      last_vacuum     last_autovacuum 
+                             last_analyze    last_autoanalyze
+	                )],
+	                'pg_stat_user_tables',
+			[         'relname',    '=', $dh->quote($table),
+			   'and', 'schemaname', '=', $dh->quote($schema),
+                        ]
+);
+    
+	my $r2 =
+       [
+	  sprintf( '%-14s : %s', 'n_dead_tup'      ,  $h->{n_dead_tup}      ),
+	  sprintf( '%-14s : %s', 'last_analyze'    ,  $h->{last_analyze}    ),
+	  sprintf( '%-14s: %s', 'last_autoanalyze',  $h->{last_autoanalyze}),
+	  sprintf( '%-14s : %s', 'last_vacuum'     ,  $h->{vacuum}          ),
+	  sprintf( '%-14s: %s', 'last_autovacuum' ,  $h->{autovacuum}      ),
+       ];
+
+	[@$r1,@$r2]
+}
+sub all_databases_desc {
+       #[ sort map { sprintf '%-15s %8s%15s%10s%7.2f%% %5s %-19s', 
+          sprintf '%-15s %8s %14s %8s %8s %8s %8s', 'NAME', 'BENDS','COMMIT',
+                              'ROLL','% READ', 'AGE', '';
+}
+sub all_databases {
+	my $o = shift;
+	my $dsn =  form_dsn ($o, '');
+	my $dh  = dbconnect( $o, $dsn  ) or return;
+        my $st  = $dh->select({
+                fields=> [qw( pg_database.datname numbackends 
+                              xact_commit         xact_rollback
+                              blks_read           blks_hit 
+                              age(datfrozenxid)
+                              pg_catalog.pg_encoding_to_char(encoding) 
+                          )],
+                table=>'pg_stat_database,pg_database',
+                join=>'pg_stat_database.datname=pg_database.datname',
+                });
+
+
+       [ sort map { sprintf '%-15s %8s%15s%10s%7.2f%% %9s %-12s', 
+	@{$_}[0..3],  calc_read_ratio( @{$_}[4..5]), @{$_}[6..7] }  
+		       @{ $st->fetchall_arrayref} ];
 }
 
 1;

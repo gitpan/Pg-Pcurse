@@ -4,7 +4,7 @@ package Pg::Pcurse::Misc;
 use Carp::Assert;
 use Getopt::Compact;
 use base 'Exporter';
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 use Data::Dumper;
 
 @EXPORT = qw(

@@ -7,7 +7,7 @@ use base 'Exporter';
 use Data::Dumper;
 use strict;
 use warnings;
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 use Pg::Pcurse::Query0;
 
 
@@ -18,27 +18,6 @@ our @EXPORT = qw(
 );
 
 
-sub actual_tables_rows {
-	# Output: a hashref like { tablename => row_size, ... }
-	#         {tblname=>undef} when permissions inhibit read access
-	#         {tblname=>0}     when table contains no rows
-
-	my ($o, $database , $schema ) = @_;
-	#return ['system'] if $schema =~ /^ (pg_ | information_schema) /xo;
-	my $dh  = dbconnect ( $o, form_dsn($o, $database ) ) or return;
-	my $st  = $dh->select( 'tablename as name', 
-                               'pg_tables',
-                               ['schemaname','=', $dh->quote($schema)]) 
-                                        or return {} ;
-                                        
-	my $rows ;	
-	for my $relname ( map {@$_} @{ $dh->fetchall_arrayref} ) { 
-		eval{($rows) = $dh->select_one_to_array('count(1)',$relname )};
-		$_->{ $relname } =  $@ ? undef: $rows ;
-	}
-	$_ ;
-
-}
 
 sub estimated_tables_rows {
 	# Output: a hashref like { tablename => row_size, ... }
@@ -108,6 +87,36 @@ sub tables_brief {
         [ @arr ];
 }
 
+sub actual_tables_rows {
+	# Output: a hashref like { tablename => row_size, ... }
+	#         {tblname=>undef} when permissions inhibit read access
+	#         {tblname=>0}     when table contains no rows
+
+	my ($o, $database , $schema ) = @_;
+	#return ['system'] if $schema =~ /^ (pg_ | information_schema) /xo;
+	my $dh  = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+	my $st  = $dh->select( 'tablename as name', 
+                               'pg_tables',
+                               ['schemaname','=', $dh->quote($schema)]) 
+                                        or return {} ;
+
+	for my $relname ( map {@$_} @{ $dh->fetchall_arrayref} ) { 
+		eval {($_{ $relname }) = $dh->select_one_to_array( 'count(1)',
+                                                     "${schema}.${relname}");
+		};
+	}
+	\%_ ;
+
+}
 
 1;
 __END__ 
+-----------
+	for my $relname ( map {@$_} @{ $dh->fetchall_arrayref} ) { 
+                                        
+	for my $relname ( map {@$_} @{ $dh->fetchall_arrayref} ) { 
+	($_{ $relname }) = $dh->select_one_to_array(
+                                      'count(1)',
+                                     "${schema}.${relname}")
+	}
+	\%_ ;
