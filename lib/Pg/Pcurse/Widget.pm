@@ -77,11 +77,11 @@ sub miniscan_5c {
 
 sub _Database_Menu_Choice {
         my $dbs = shift;
-        my $ret ;
-        for  my $i ( @$dbs)  { $ret->{$i}= sub{ $::db=$i} }
-        $ret->{ITEMORDER} = $dbs ;
-        $ret;
+        { ITEMORDER => $dbs ,
+          map  { my $i=$_; ($_ => sub{ $::db=$i}) } @$dbs,
+        }
 }
+
 
 my @MODES = sort qw( Vacuum Stats Procedures Tables Views Users 
                      Databases Buffers Indexes Settings Triggers Bucardo

@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                Pg-Pcurse
-version:             0.07
+version:             0.08
 abstract:            Monitors a Postgres cluster
 license:             ~
 author:              
@@ -8,14 +8,16 @@ author:
 generated_by:        ExtUtils::MakeMaker version 6.44
 distribution_type:   module
 requires:     
-    Carp::Assert:                  0
-    Curses:                        0
-    Curses::Widgets:               0
-    Data::Dumper:                  0
-    DBIx::Abstract:                0
-    Getopt::Compact:               0
+    Carp::Assert:                  0.18
+    Curses:                        1.23
+    Curses::Widgets:               1.997
+    Data::Dumper:                  2.121_08
+    DBIx::Abstract:                1.006
+    File::Slurp:                   9999.12
+    Getopt::Long:                  2.35
     Test::Pod:                     1.0
     Test::Pod::Coverage:           1.0
+    User::pwent:                   1.00
 meta-spec:
     url:     http://module-build.sourceforge.net/META-spec-v1.3.html
     version: 1.3

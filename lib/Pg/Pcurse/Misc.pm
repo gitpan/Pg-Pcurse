@@ -2,10 +2,12 @@
 # LICENSE:  GPLv3, eead licensing terms at  http://www.fsf.org .
 package Pg::Pcurse::Misc;
 use Carp::Assert;
-use Getopt::Compact;
+use Getopt::Long;
 use base 'Exporter';
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 use Data::Dumper;
+use User::pwent;
+use File::Slurp qw( slurp );
 
 @EXPORT = qw(
 	get_getopt
@@ -14,25 +16,49 @@ use Data::Dumper;
 	schema_sorter
 );
 
+Getopt::Long::Configure qw(  auto_version auto_help );
+
 sub get_getopt {
-	new Getopt::Compact  modes  => [qw( verbose  )],
-                             struct => [ ['dbname', 'dbname', ':s'],
-                                         ['host', 'hostname', ':s'],
-                                         ['user', 'user',     ':s'],
-                                         ['passwd', 'passwd', ':s'],
-                                         ['port',   'port',   ':s'],
-                                        ],
+	my $o;
+	GetOptions ( 'dbname:s' => \$o->{dbname},
+		     'host:s'   => \$o->{host},
+		     'user:s'   => \$o->{user},
+		     'verbose'  => \$o->{verbose},
+		     'passwd:s' => \$o->{passwd},
+		     'port:i'   => \$o->{port},
+		) or exit(1) ;
+	$o;
+}
+
+
+sub passwd_from_pgpass {
+	my $o  = shift;
+	my $pw = getpwnam getlogin;
+	my $pgpass = $pw->dir . '/.pgpass';
+	return unless -r $pgpass;
+	for (slurp $pgpass) {
+		next if /^ \s*#/o ;
+		chomp;
+		next unless / $o->{user}:.*? $/xo ;
+		my ($h,$p,$d,$u,$passwd) = split ':';
+		next unless $passwd;
+		next unless $h =~ /^ ($o->{host}|\*) $/xo;
+		next unless $p =~ /^ ($o->{port}|\*) $/xo;
+		next unless $d =~ /^ ($o->{dbname}|\*) $/xo;
+		return $passwd ;
+	};
+	return;
 }
 
 sub process_options {
-	my $o = shift;
+	my ($o, @argv) = @_;
 	assert( ref$o, 'HASH' );
-	$o->{user}   =  getlogin   unless $o->{user};
-	$o->{passwd} =  undef      unless $o->{passwd};
-	$o->{host}   = 'localhost' unless $o->{host};
-	$o->{dbname} = 'template1' unless $o->{dbname};
-	$o->{port}   =  5432       unless $o->{port};
-	$o->{verbose}=  0          unless $o->{verbose};
+	$o->{user}   = $o->{user}   || $argv[1] || getlogin   ;
+	$o->{host}   = $o->{host}   || 'localhost'            ;
+	$o->{dbname} = $o->{dbname} || $argv[0] || 'template1';
+	$o->{port}   = $o->{port}   || 5432                   ; 
+	#$o->{verbose};
+	$o->{passwd} = $o->{passwd} || passwd_from_pgpass($o) ;
 	$o;
 }
 sub schema_sorter($$) {

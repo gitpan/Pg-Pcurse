@@ -7,12 +7,12 @@ use base 'Exporter';
 use Data::Dumper;
 use strict;
 use warnings;
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 use Pg::Pcurse::Misc;
 use Pg::Pcurse::Query0;
 
 our @EXPORT = qw( 
-	tables_vacuum  get_table       all_settings   
+	tables_vacuum  all_settings   
         get_proc_desc  get_proc        tables_vacuum2
         get_setting    table_buffers   over_dbs
         analyze_tbl    analyze_db      vacuum_per_table
@@ -193,7 +193,7 @@ sub table_buffers {
 	union
 	select 'buffers_clean',   (select buffers_clean from pg_stat_bgwriter)
 	union
-	select 'checkpoint_buffers', (select buffers_checkpoint from pg_stat_bgwriter)
+	select 'buffers_checkpoint', (select buffers_checkpoint from pg_stat_bgwriter)
 	union
 	select 'maxwritten_clean', (select maxwritten_clean from pg_stat_bgwriter)
 	union
@@ -259,14 +259,7 @@ sub table_stats2 {
 	      @{ $h } ];
 
 }
-sub get_table {
-	#TODO it crashes when we dont' have permission to the table
-return ['needs work'];
-	my ($o, $database , $schema, $table) = @_;
-	my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
-	my $st = $dh->select('*', "$schema.$table" )  or return;
-	[ map {"@$_"}  @{$st->fetchall_arrayref}]  ;
-}
+
 sub all_settings {
 	my $o = shift;
 	my $dh = dbconnect ( $o, form_dsn($o,'') ) or return;
@@ -317,22 +310,22 @@ sub get_index {
                  'pg_index',
                   [ 'indexrelid','=', $qin]);
 
-        [ sprintf( '%-14s : %s', 'name' ,       $h->{indexrelid} || ''),
-          sprintf( '%-14s : %s', 'indexrelid' , $indexrelid),
-          sprintf( '%-14s : %s', 'indrelid' ,   $h->{indrelid}),
-          sprintf( '%-14s : %s', 'indnatts' ,   $h->{indnatts}),
-          sprintf( '%-14s : %s', 'indisunique' , $h->{indisunique} ),
-          sprintf( '%-14s : %s', 'indisprimary' , $h->{indisprimary} ),
-          sprintf( '%-14s : %s', 'indisclustered' , $h->{indisclustered} ),
-          sprintf( '%-14s : %s', 'indisvalid' , $h->{indisvalid} ),
-          sprintf( '%-14s : %s', 'indcheckxmin' , $h->{indcheckxmin} ),
-          sprintf( '%-14s : %s', 'indisready' , $h->{indisready} ),
-          sprintf( '%-14s : %s', 'indkey' , $h->{indkey} ),
-          sprintf( '%-14s : %s', 'indkey' , $h->{indkey} ),
-          sprintf( '%-14s : %s', 'indclass' , $h->{indclass} ),
-          sprintf( '%-14s : %s', 'indoption' , $h->{indoption} ),
-          sprintf( '%-14s : %s', 'indexprs' , $h->{indexprs} ),
-          sprintf( '%-14s : %s', 'indpred' , $h->{indpred} ),
+        [ sprintf( '%-14s : %s', 'name'       , $h->{indexrelid}    ),
+          sprintf( '%-14s : %s', 'exrelid'    , $indexrelid         ),
+          sprintf( '%-14s : %s', 'relid'      , $h->{indrelid}      ),
+          sprintf( '%-14s : %s', 'natts'      , $h->{indnatts}      ),
+          sprintf( '%-14s : %s', 'isunique'   , $h->{indisunique}   ),
+          sprintf( '%-14s : %s', 'isprimary'  , $h->{indisprimary}  ),
+          sprintf( '%-14s : %s', 'isclustered', $h->{indisclustered}),
+          sprintf( '%-14s : %s', 'isvalid'    , $h->{indisvalid}    ),
+          sprintf( '%-14s : %s', 'checkxmin'  , $h->{indcheckxmin}  ),
+          sprintf( '%-14s : %s', 'isready'    , $h->{indisready}    ),
+          sprintf( '%-14s : %s', 'key'        , $h->{indkey}        ),
+          sprintf( '%-14s : %s', 'key'        , $h->{indkey}        ),
+          sprintf( '%-14s : %s', 'class'      , $h->{indclass}      ),
+          sprintf( '%-14s : %s', 'option'     , $h->{indoption}     ),
+          sprintf( '%-14s : %s', 'exprs'      , $h->{indexprs}      ),
+          sprintf( '%-14s : %s', 'pred'       , $h->{indpred}       ),
         ]
 
 }
@@ -341,11 +334,11 @@ sub pgbuffercache {
         my ($o, $database )= @_;
         my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
 
-	my $user = $dh->quote('postgres');
-        my $h = $dh->select_one_to_hashref( "user = $user as who" );
+        my $h = $dh->select_one_to_hashref(<<"");
+	   user in (select rolname from pg_roles where rolsuper) as super
 
-        return [ q(Must be user "postgres" to view buffer data.) ]
-                     unless $h->{who}; 
+        return [ q(Must be in a "super" role to view buffer data.) ]
+                     unless $h->{super}; 
 
         my $v = $dh->quote('pg_buffercache') ;
         $h    = $dh->{dbh}->selectrow_array(<<""); 
@@ -672,21 +665,20 @@ sub table_stat {
 			[         'relname',    '=', $dh->quote($table),
 			   'and', 'schemaname', '=', $dh->quote($schema),
                         ]
-);
+             );
     
 	my $r2 =
-       [
+        [
 	  sprintf( '%-14s : %s', 'n_dead_tup'      ,  $h->{n_dead_tup}      ),
 	  sprintf( '%-14s : %s', 'last_analyze'    ,  $h->{last_analyze}    ),
 	  sprintf( '%-14s: %s', 'last_autoanalyze',  $h->{last_autoanalyze}),
 	  sprintf( '%-14s : %s', 'last_vacuum'     ,  $h->{vacuum}          ),
 	  sprintf( '%-14s: %s', 'last_autovacuum' ,  $h->{autovacuum}      ),
-       ];
+        ];
 
 	[@$r1,@$r2]
 }
 sub all_databases_desc {
-       #[ sort map { sprintf '%-15s %8s%15s%10s%7.2f%% %5s %-19s', 
           sprintf '%-15s %8s %14s %8s %8s %8s %8s', 'NAME', 'BENDS','COMMIT',
                               'ROLL','% READ', 'AGE', '';
 }

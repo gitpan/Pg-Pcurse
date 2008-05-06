@@ -1,6 +1,10 @@
 Revision history for Perl extension Pg::Pcurse.
 
-0.07  Man May  2 06:31:03 2008
+0.07  Man May  5 06:53:22 2008
+	- Attemp to read passwd from ~/.pgpass
+	- CLI invocation enhancements
+
+0.07  Fri May  2 06:31:03 2008
 	- Renamed mode 'overview' to 'databases'
 	- Fixed calculation of row sizes 
 	- Added more fields to 'd' tables

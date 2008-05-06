@@ -5,7 +5,7 @@ use Curses;
 use Pg::Pcurse;
 use Pg::Pcurse::Widget;
 use Data::Dumper;
-use Getopt::Compact;
+#use Getopt::Compact;
 use strict;
 use warnings;
 
@@ -14,27 +14,13 @@ use Pg::Pcurse::Query0;
 use Pg::Pcurse::Query1;
 use Pg::Pcurse::Query2;
 
+*VERSION= *Pg::Pcurse::VERSION;
+
 *addstr = \&Curses::Widgets::addstr;
 
-$opt = get_getopt;
-
-if ($opt->{h}) { print $opt->usage  ; init_screen; endwin; exit(0) }
-$opt = process_options($opt->opts);
+$opt = process_options( get_getopt(), @ARGV);
 
 
-
-=begin a
-
-#my $tab = tables_brief ($opt, 'bucardo', 'pg_toast' );
-#my $tab  = over_dbs( $opt, 'devhip');
-my $tab  = all_databases( $opt, 'devhip');
-
-print Dumper $tab;
-print 'done';
-exit;
-=end a
-
-=cut
 
 ## Test connection 
 unless (my $dh = dbconnect ( $opt, form_dsn($opt, '' ) ) ) {
@@ -43,12 +29,13 @@ unless (my $dh = dbconnect ( $opt, form_dsn($opt, '' ) ) ) {
 	exit(0);
 }
 
+
 init_screen;
 $::mwh  = create_root;
 my $dbs  = [ databases2 $opt ];
 my $main = form_dbmenu ($dbs);
-$::mode='vacuum';
-$::mode='databases';
+undef $::db;
+$::mode='buffers';
 $::mode='tables';
 
 init_mini_root;
@@ -57,7 +44,7 @@ while(2) {
 	$main->draw($::mwh,1);
 	$main->execute($::mwh);
 
-	#TODO: who initialized $main::db ?
+	# $main::db is initialized from  _Database_Menu_Choice()
         $::dbname  = $main::db || $opt->{dbname} || $dbs->[0] || 'template1';
 
 	# display database name
@@ -77,11 +64,13 @@ while(2) {
 
 
 END { 
-	$::mwh->addstr(23,1,'Thank you for flying Pcurse!');
-	$::mwh->refresh;  
+	if (defined $::mwh) {
+		$::mwh->addstr(23,1,'Thank you for flying Pcurse!');
+		$::mwh->refresh;  
+	}
         endwin() 
 }
-
+1;
 __END__
 
 =head1 NAME
@@ -90,23 +79,28 @@ pcurse - Monitor  Postgres  databases
 
 =head1 SYNOPSIS
 
-$ pcurse --host  localhost --user john --passwd apple
+ $ pcurse  [options]   [dbname]   [user]
+ for example:
+ $ pcurse  template1  john  --passwd apple
+
+=head2 options
+
+      --dbname      Default is template1
+      --host        Default is localhost
+      --user        Default is getlogin() 
+      --passwd      Default is read from ~/.pgpass
+      --port        Default is 5432
+
 
 =head1 DESCRIPTION
 
 pcurse(1) monitors a Postgres database cluster. 
 It shows statistics on tables, indexes, vacuuming, buffers, etc,.
 
-=head1 NOTE
+=head1 INVOCATION
 
-pcurse(1) must connect to the Postgres server in order to do anything.
-At startup, pcurse(1) tests if your login is valid before executing 
-any graphics that might mess up the terminal.  
-I took great care not to mess up
-your screen, but remember you can always reset your terminal if
-the program exits abnormally and fails to restore the screen or your 
-blinking cursor in a sane state. CLOSE YOUR EYES AND TYPE 'reset' -- this 
-will reset your terminal screen.
+
+
 
 =head1 USAGE
 

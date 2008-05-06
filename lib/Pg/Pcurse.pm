@@ -22,7 +22,7 @@ use Pg::Pcurse::Query1;
 use Pg::Pcurse::Query2;
 use Pg::Pcurse::Query3;
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 our $opt;
 
@@ -226,11 +226,6 @@ sub tstat {
         my $index = $::big->getField('VALUE');
         my ($f) = first_word( $::tab->[$index] );
         table_stat( $opt, $::dbname, $::sname, $f ) or return [];
-}
-sub tableof {
-        my $index = $::big->getField('VALUE');
-        my ($f) = first_word( $::tab->[$index] );
-        get_table( $opt, $::dbname, $::sname, $f ) or return [];
 }
 
 ##########################################################################

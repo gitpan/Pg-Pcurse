@@ -4,18 +4,19 @@ my $b= Module::Build->new(
         dist_version_from  => 'lib/Pg/Pcurse.pm',
         dist_author        => 'Ioannis Tambouras<ioannis@cpan.org>',
         requires           => {  perl                 => '5.8',
-				#'File::Slurp'        => '9999.12',
                                 #'FindBin'            => '1.47',
                                 #'Log::Log4perl'      => '1.06',
-                                'DBIx::Abstract'      => '0',
-                                'Data::Dumper'        => '0',
-                                'Carp::Assert'        => '0',
-                                'Curses'              => '0',
-                                'Curses::Widgets'     => '0',
-                                'Getopt::Compact'     => '0',
-                             #  'Text::Autoformat'    => '0',
+                                #'Text::Autoformat'   => '0',
+                                'DBIx::Abstract'      => '1.006',
+                                'Data::Dumper'        => '2.121_08',
+                                'Carp::Assert'        => '0.18',
+                                'Curses'              => '1.23',
+                                'Curses::Widgets'     => '1.997',
+                                'Getopt::Long'        => '2.35',
+                                'File::Slurp'         => '9999.12',
+                                'User::pwent'         => '1.00',
                               },
-        recommends         => { 'Test::Pod'           => 1.20,
+        recommends         => { 'Test::Pod'           =>  1.0,
                                 'Test::Pod::Coverage' => '1.0',
                                 #'Test::Exception'    => 0.25,
                               },
@@ -26,5 +27,5 @@ my $b= Module::Build->new(
 
 $b->create_build_script;
 
-print  "\nIt takes 2 seconds. This time read the README file!\n\n";
+#print  "\nIt takes 2 seconds. This time read the README file!\n\n";
 
