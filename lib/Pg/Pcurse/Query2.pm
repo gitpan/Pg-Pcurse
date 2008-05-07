@@ -51,20 +51,8 @@ sub tables_brief {
 	my $dh = dbconnect ( $o, form_dsn($o,$database)  ) or return;
         (my $st  = $dh->{dbh}->prepare(<<""))->execute($schema) or return ;
 	select relname,
-		case
-		when (last_vacuum is null)and(last_autovacuum is null) then null
-		when (last_vacuum is null) then last_autovacuum
-		when (last_autovacuum is null) then last_vacuum
-		when age(last_vacuum,last_autovacuum)>'1 second'then last_vacuum
-		else last_autovacuum
-		end as vacuum,
-		case
-		when(last_analyze is null)and(last_autoanalyze is null)then null
-		when (last_analyze is null) then last_autoanalyze
-		when (last_autoanalyze is null) then last_analyze
-		when age(last_analyze, last_autoanalyze)>'1 second' then last_analyze
-		else last_autoanalyze
-		end as analyze
+		greatest( last_vacuum,  last_autovacuum)  as vacuum,
+		greatest( last_analyze, last_autoanalyze) as analyze
 	from pg_stat_all_tables
 	where schemaname= ?
 	order by 1

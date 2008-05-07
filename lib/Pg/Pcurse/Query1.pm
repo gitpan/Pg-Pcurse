@@ -123,12 +123,11 @@ sub get_proc {
         my $h = $dh->{dbh}->selectall_arrayref(<<"" );
 	select proname,           lanname,
 	       proisstrict as s,  proretset as set,  provolatile as v,
-	       pronargs as nargs, typname, p.oid
+	       pronargs as nargs, prorettype::regtype, 
+               p.oid
 	from pg_proc  p
              join pg_namespace n on (pronamespace=n.oid)
 	     join pg_language  l on (prolang=l.oid)
-	     join pg_roles     r on (proowner=r.oid)
-	     join pg_type      t on (prorettype=t.oid)
 	where nspname=$schema
 	order by 1
 
@@ -146,20 +145,8 @@ sub tables_vacuum {
 	$schema = $dh->quote($schema);
         my $h  = $dh->{dbh}->selectall_arrayref(<<"");
 	select relname,
-		case
-		when (last_vacuum is null)and(last_autovacuum is null) then null
-		when (last_vacuum is null) then last_autovacuum
-		when (last_autovacuum is null) then last_vacuum
-		when age(last_vacuum,last_autovacuum)>'1 second'then last_vacuum
-		else last_autovacuum
-		end as vacuum,
-		case
-		when(last_analyze is null)and(last_autoanalyze is null)then null
-		when (last_analyze is null) then last_autoanalyze
-		when (last_autoanalyze is null) then last_analyze
-		when age(last_analyze, last_autoanalyze)>'1 second' then last_analyze
-		else last_autoanalyze
-		end as analyze
+		greatest( last_vacuum,  last_autovacuum ) as vacuum,
+		greatest( last_analyze, last_autoanalyze) as analyze
 	from pg_stat_all_tables
 	where schemaname=$schema
 	order by 2, 3, 1
@@ -170,7 +157,7 @@ sub tables_vacuum {
 }
 
 sub table_buffers { 
-	my $o = shift;
+	my ($o)= @_;
 	my $dh = dbconnect ( $o, form_dsn($o, '')  ) or return;
         my $h  = $dh->{dbh}->selectall_arrayref(<<"");
 	select 'checkpoints_timed',(select checkpoints_timed 
@@ -261,7 +248,7 @@ sub table_stats2 {
 }
 
 sub all_settings {
-	my $o = shift;
+	my ($o)= @_;
 	my $dh = dbconnect ( $o, form_dsn($o,'') ) or return;
 	my $st = $dh->select([qw(name setting unit)], 'pg_settings')  or return;
 	[ map { sprintf '%-34s%19s%10s', $_->[0], $_->[1]||'', $_->[2]||'' }
@@ -330,33 +317,6 @@ sub get_index {
 
 }
       
-sub pgbuffercache {
-        my ($o, $database )= @_;
-        my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
-
-        my $h = $dh->select_one_to_hashref(<<"");
-	   user in (select rolname from pg_roles where rolsuper) as super
-
-        return [ q(Must be in a "super" role to view buffer data.) ]
-                     unless $h->{super}; 
-
-        my $v = $dh->quote('pg_buffercache') ;
-        $h    = $dh->{dbh}->selectrow_array(<<""); 
-		      select viewname from pg_views   where viewname = $v
-
-        return [ q(No public.pg_buffercache in this database.) ]   unless $h;
-
-        $h = $dh->{dbh}->selectall_arrayref( <<"");
-	  	select relfilenode::regclass as name, count(1)
-		from   pg_buffercache
-		where  relfilenode is not null
-		group  by 1
-		order  by 2 desc
-		;
-
-	[ map { sprintf '%-35s : %9s', @{$_}[0..1] }  @$h ]
-}   
-
 
 sub get_nspacl {
 	my ($o, $database, $schema) = @_;
@@ -449,7 +409,7 @@ sub bucardo_conf_desc {
 	sprintf '%-25s  %s', 'setting', 'value ' ;
 }
 sub bucardo_conf {
-        my $o = shift;
+        my ($o)= @_;
         my $dh = dbconnect ( $o, form_dsn($o, 'bucardo')  ) or return;
         my $h  = $dh->{dbh}->selectall_arrayref(<<"");
 		SELECT  setting, value, about, cdate 
@@ -493,8 +453,8 @@ sub get_users {
         my $dh = dbconnect ( $o, form_dsn($o,$database)  ) or return;
         my $h   = $dh->{dbh}->selectall_arrayref(<<"") ;
 	select usename,
-		case when(usesuper) then 'super' else ''  end as superuser,
-		case when(usecatupd) then 'catupd' else ''   end as catupd,
+		case when(usesuper)  then 'super' else ''  end as superuser,
+		case when(usecatupd) then 'catupd' else '' end as catupd,
 		case when(usecreatedb) then 'createdb' else '' end as createdb
 	from pg_user
 	order by 2 desc,1
@@ -602,7 +562,7 @@ sub over_dbs {
 sub calc_read_ratio {
 	my ($read,$hit) = @_ ;
 	return 'infinite' unless $hit;
- 	sprintf '%.4f', (100*$read/$hit) ;
+ 	sprintf '%.4f%%', (100*$read/$hit) ;
 }
 
 sub table_stat {
@@ -683,7 +643,7 @@ sub all_databases_desc {
                               'ROLL','% READ', 'AGE', '';
 }
 sub all_databases {
-	my $o = shift;
+	my ($o) = @_;
 	my $dsn =  form_dsn ($o, '');
 	my $dh  = dbconnect( $o, $dsn  ) or return;
         my $st  = $dh->select({
@@ -697,11 +657,50 @@ sub all_databases {
                 join=>'pg_stat_database.datname=pg_database.datname',
                 });
 
-
-       [ sort map { sprintf '%-15s %8s%15s%10s%7.2f%% %9s %-12s', 
-	@{$_}[0..3],  calc_read_ratio( @{$_}[4..5]), @{$_}[6..7] }  
+       [ sort map { sprintf '%-15s %8s%15s%10s%7.2f %9s %-12s', 
+	@{$_}[0..3],  calc_read_ratio(@{$_}[4..5]), @{$_}[6..7] }  
 		       @{ $st->fetchall_arrayref} ];
 }
+
+sub search4func {
+	my ( $o, $func, @dbs) = @_ ;
+	for my $d (@dbs) {
+		my $dh = dbconnect ( $o, form_dsn($o, $d) ) or next; 
+		my $h    = $dh->select_one_to_hashref( 'proname', 'pg_proc',  
+			[ 'proname','=', $dh->quote($func) ] ) ;
+		return $d if exists $h->{proname};
+	}
+	return ;
+}
+
+sub pgbuffercache {
+        my ($o, $database )= @_;
+        my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+
+        my $h = $dh->select_one_to_hashref(<<"");
+	   user in (select rolname from pg_roles where rolsuper) as super
+
+        return [ q(Must be in a "super" role to view buffer data.) ]
+                     unless $h->{super}; 
+	my $db_of_func = search4func( $o, 'pg_buffercache_pages',
+                                        $database, databases2 $o ) ;
+        return [q(public.pg_buffercache found in any database.)] 
+                   unless $db_of_func;
+
+	if ($db_of_func eq $database) {
+		$h = $dh->{dbh}->selectall_arrayref( <<"");
+			select relfilenode::regclass as name, count(1)
+			from   pg_buffercache
+			where  relfilenode is not null
+			group  by 1
+			order  by 2 desc
+
+		return [ map { sprintf '%-35s : %9s', @{$_}[0..1] }  @$h ]; 
+	}else{
+		return [ "public.pg_buffercache is at $db_of_func" ];
+	}
+}   
+
 
 1;
 __END__

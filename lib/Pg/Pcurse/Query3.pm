@@ -61,19 +61,18 @@ sub proc_of {
         my ($o, $database, $oid )= @_;
         my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
 
-        (my $st = $dh->{dbh}->prepare( <<""))->execute( $oid );
-	         select proname  , nspname , rolname as owner,
+        (my $st = $dh->{dbh}->prepare( <<""))->execute( $oid, 'pg_proc', $oid);
+	         select proname  , nspname , pg_get_userbyid(proowner) as owner,
                         lanname  , procost , prorows       , proisagg ,
                         prosecdef, proisstrict , proretset , provolatile , 
-                        pronargs , typname     , proallargtypes, 
+                        pronargs , prorettype::regtype     , proallargtypes, 
                         proargtypes ,
                         prosrc   , proargmodes , proargnames, probin ,
-                        proacl   , proconfig   
+                        proacl   , proconfig   ,
+		        pg_catalog.obj_description( ?, ? )  as desc
 		from pg_proc p 
                      join pg_namespace n on (pronamespace= n.oid)
 		     join pg_language  l on (prolang = l.oid)
-		     join pg_roles     r on (proowner=r.oid)
-		     join pg_type      t on (prorettype=t.oid)
                 where p.oid = ?
 
         my $h = $st->fetchrow_hashref  ;
@@ -83,24 +82,25 @@ sub proc_of {
 	  sprintf( '%-12s : %s', 'namespace',$h->{nspname}     ),
 	  sprintf( '%-12s : %s', 'owner',    $h->{owner}       ),
 	  sprintf( '%-12s : %s', 'lang',     $h->{lanname}     ),
-	  sprintf( '%-12s : %s', 'cost',     $h->{procost}     ),
+	  sprintf( '%-12s : %s', 'desc',     $h->{desc}        ),
+	  sprintf( '%-12s : %s', 'src',      $h->{prosrc}      ),
 	  sprintf( '%-12s : %s', 'rows',     $h->{prorows}     ),
 	  sprintf( '%-12s : %s', 'isagg',    $h->{proisagg}    ),
 	  sprintf( '%-12s : %s', 'secdef',   $h->{prosecdef}   ),
 	  sprintf( '%-12s : %s', 'isstrict', $h->{proisstrict} ),
 	  sprintf( '%-12s : %s', 'retset',   $h->{proretset}   ),
-	  sprintf( '%-12s : %s', 'volatile', $h->{provolatile} ),
 	  sprintf( '%-12s : %s', 'nargs',    $h->{pronargs}    ),
-	  sprintf( '%-12s : %s', 'rettype',  $h->{typname}  ),
+	  sprintf( '%-12s : %s', 'rettype',  $h->{prorettype}  ),
 	  sprintf( '%-12s : %s', 'argtypes', $h->{proargtypes} ),
 	  sprintf( '%-12s : %s', 'argmodes', $h->{proargmodes} ),
+	  sprintf( '%-12s : %s', 'acl',      $h->{proacl}      ),
 	  #printf( '%-12s : %s', 'argnames', ($h->{proargnames})
                              #?  $h->{proargnames}[0] : ''),
-          #sprintf( '%-12s : %s', 'bin',      $h->{probin}      ),
+          #sprintf( '%-12s : %s', 'bin',     $h->{probin}      ),
+	  sprintf( '%-12s : %s', 'volatile', $h->{provolatile} ),
 	  sprintf( '%-12s : %s', 'config',   $h->{proconfig}   ),
-	  sprintf( '%-12s : %s', 'acl',      $h->{proacl}      ),
-	  sprintf( '%-12s : %s', 'src',      $h->{prosrc}      ),
-	  #sprintf( '%-12s : %s', 'src',      ($h->{prosrc})
+	  sprintf( '%-12s : %s', 'cost',     $h->{procost}     ),
+	  #sprintf( '%-12s : %s', 'src',     ($h->{prosrc})
           #?  "@{[ Curses::Widgets::textwrap($h->{prosrc}, 40)]}"
           #: ''  ),
 	];

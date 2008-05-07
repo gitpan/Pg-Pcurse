@@ -1,6 +1,10 @@
 Revision history for Perl extension Pg::Pcurse.
 
-0.07  Man May  5 06:53:22 2008
+0.09  Wed May  7 08:55:42 2008
+	- minor code refactoring
+	- query refactoring
+
+0.08  Man May  5 06:53:22 2008
 	- Attemp to read passwd from ~/.pgpass
 	- CLI invocation enhancements
 

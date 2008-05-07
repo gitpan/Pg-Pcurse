@@ -22,7 +22,7 @@ use Pg::Pcurse::Query1;
 use Pg::Pcurse::Query2;
 use Pg::Pcurse::Query3;
 
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 
 our $opt;
 
@@ -58,58 +58,53 @@ sub execute_mode {
          } -> {$mode})->();
 }
 
-##### The following Tables are ready for creation
-sub first_cinema {
-        my ($desc, $fun) = @_ ;
-        $::tab   =   $fun->( $opt) or return;
-        $::big   =   big_listbox( $desc, $::tab, 11, 0);
-        $::big->execute($::mwh,0);
-}
-sub show_databases{ first_cinema( all_databases_desc() , \& all_databases )}
-sub show_settings { first_cinema( '', \& all_settings  )}
-sub show_buffers  { first_cinema( '', \& table_buffers )} 
-sub show_bucardo  { first_cinema( bucardo_conf_desc(), \& bucardo_conf)} 
 
 #########################################################################
-##### These Tables will first need a Schema table, then will show result
+
 sub update_schema_display {
         #  Schema Table
         $::she     = get_schemas2( $opt, $::dbname) or return;
         $::schemas = secondary_listbox('Schemas', $::she, 2,37);
         $::schemas->execute($::mwh,0);
+        ($::sname) = first_word( $::she->[ $::schemas->getField('VALUE')] );
 }
 
 sub update_big_display {
         # Result Table ( like relevant tables, indexes, objects, etc,. )
-        ($::sname) = first_word( $::she->[ $::schemas->getField('VALUE')] );
+       ($::desc, $::actual) = @_ ;
         $::desc    = $::desc->();
         $::tab     = $::actual->( $opt, $::dbname, $::sname);
         $::big     = big_listbox( $::desc, $::tab, 11, 0);
         $::big->execute($::mwh,0);
 }
-sub same_movie {
+sub whole_movie {
         ($::desc, $::actual) = @_ ;
-	update_schema_display;
-	update_big_display;
+	update_schema_display( $::desc, $::actual );
+	update_big_display( $::desc, $::actual) ;
 }
 
 
-sub show_stats   { same_movie( \&table_stats_desc, \&table_stats       )  }
-sub show_vacuum  { same_movie( \&tables_vacuum_desc, \&tables_vacuum   )  }
-#sub show_tables  { same_movie( \&get_tables_all_desc, \&get_tables_all)  }
-sub show_tables  { same_movie( \&tables_brief_desc, \&tables_brief     )  }
-sub show_views   { same_movie( \&get_views_all_desc, \&get_views_all   )  }
-sub show_procedu { same_movie( \&get_proc_desc, \&get_proc             )  }
-sub show_indexes { same_movie( \&index2_desc, \&index2                 )  }
-sub show_rules   { same_movie( \&rules_desc, \&rules                   )  }
-sub show_triggers{ same_movie( \&schema_trg_desc, \&schema_trg         )  }
-sub show_users   { same_movie( \&get_users_desc, \&get_users           )  }
+sub show_stats   { whole_movie( \&table_stats_desc, \&table_stats       )  }
+sub show_vacuum  { whole_movie( \&tables_vacuum_desc, \&tables_vacuum   )  }
+sub show_tables  { whole_movie( \&tables_brief_desc, \&tables_brief     )  }
+sub show_views   { whole_movie( \&get_views_all_desc, \&get_views_all   )  }
+sub show_procedu { whole_movie( \&get_proc_desc, \&get_proc             )  }
+sub show_indexes { whole_movie( \&index2_desc, \&index2                 )  }
+sub show_rules   { whole_movie( \&rules_desc, \&rules                   )  }
+sub show_triggers{ whole_movie( \&schema_trg_desc, \&schema_trg         )  }
+sub show_users   { whole_movie( \&get_users_desc, \&get_users           )  }
+
+sub show_databases{ update_big_display( \& all_databases_desc,\& all_databases)}
+#sub show_settings { update_big_display( sub{''}, \& all_settings  )}
+sub show_buffers  { update_big_display( sub{''}, \& table_buffers )} 
+sub show_bucardo  { update_big_display( \& bucardo_conf_desc, \& bucardo_conf)} 
+sub show_settings { 
+	update_big_display( sub{''}, \& all_settings  )
+}
 
 
 ## Another dispatcher
 sub retrieve_permit {
-        #my $index = $::schemas->getField('VALUE');
-        #my $schema = $::schemas->getField('VALUE');
         my ($sna) = first_word( $::she->[ $::schemas->getField('VALUE')] );
 	get_nspacl($opt, $::dbname, $sna) ;
 }
@@ -119,7 +114,6 @@ sub retrieve_context {
 	#return if $::mode eq 'bucardo' ;
         ({  
 	    tables     => \& tstat    ,
-	   #tables     => \& statsof  ,
             views      => \& viewof   ,
             vacuum     => \& vacuumof ,
             databases  => \& over2    ,

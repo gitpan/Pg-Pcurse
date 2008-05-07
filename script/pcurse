@@ -21,14 +21,16 @@ use Pg::Pcurse::Query2;
 $opt = process_options( get_getopt(), @ARGV);
 
 
-
 ## Test connection 
 unless (my $dh = dbconnect ( $opt, form_dsn($opt, '' ) ) ) {
 	print 'Could not connect to database. Exiting...';
+	print Dumper $opt;
 	init_screen; endwin;
 	exit(0);
 }
 
+
+#print Dumper pgbuffercache($opt, 'template1') ; exit;
 
 init_screen;
 $::mwh  = create_root;
