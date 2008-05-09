@@ -30,14 +30,12 @@ unless (my $dh = dbconnect ( $opt, form_dsn($opt, '' ) ) ) {
 }
 
 
-#print Dumper pgbuffercache($opt, 'template1') ; exit;
-
 init_screen;
 $::mwh  = create_root;
 my $dbs  = [ databases2 $opt ];
 my $main = form_dbmenu ($dbs);
 undef $::db;
-$::mode='buffers';
+$::mode='databases';
 $::mode='tables';
 
 init_mini_root;
@@ -83,14 +81,14 @@ pcurse - Monitor  Postgres  databases
 
  $ pcurse  [options]   [dbname]   [user]
  for example:
- $ pcurse  template1  john  --passwd apple
+ $ pcurse -h localhost  template1  john  --passwd apple
 
 =head2 options
 
+      --passwd      Default is read from ~/.pgpass
       --dbname      Default is template1
       --host        Default is localhost
       --user        Default is getlogin() 
-      --passwd      Default is read from ~/.pgpass
       --port        Default is 5432
 
 
@@ -120,13 +118,15 @@ It is too simple:
 
 3. The results are displayed in the bottom window.
    Use arrows, vi keys, ENTER (or SPACE, or ' ' ) seals the selection.
-   Keep pressing 'd' to view more details on results.
-   'D'  key displays records of a table (CAUTION: no safe for long tables)
+   Keep pressing 'd' to view more on results.
    'A'  key attemps to analyze the table, or database
    'V'  key attemps to vacume  the table, or database
+   In tables   mode, 'D' displays table records (CAUTION: not for long tables)
+   In database mode, 'D' displays count of database objects
+   In settings mode, 'D' displays fsm data (contrib module pg_freespacemap.sql)
    TBB (or 'l') takes you back to the starting menu.
 
-4. Press 'q' to quit the program
+4. Press 'q' to quit the program. Thank you for flying Pcurse!
 
 
 

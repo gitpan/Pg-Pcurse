@@ -7,15 +7,24 @@ use base 'Exporter';
 use Data::Dumper;
 use strict;
 use warnings;
-our $VERSION = '0.07';
+our $VERSION = '0.10';
 use Pg::Pcurse::Misc;
 
 our @EXPORT = qw( 
-	form_dsn     first_word   databases    databases2 
-	dbconnect    to_d         to_h
-	one_type     types2text
+	form_dsn     first_word   databases      databases2 
+	dbconnect    to_d         to_h           search4func 
+	one_type     types2text   object_totals  object_totals_desc
 );
-
+sub search4func {
+        my ( $o, $func, @dbs) = @_ ;
+        for my $d (@dbs) {
+                my $dh = dbconnect ( $o, form_dsn($o, $d) ) or next;
+                my $h    = $dh->select_one_to_hashref( 'proname', 'pg_proc',
+                        [ 'proname','=', $dh->quote($func) ] ) ;
+                return $d if exists $h->{proname};
+        }
+        return ;
+}
 
 
 sub form_dsn {
@@ -95,6 +104,35 @@ sub types2text {
         $ret;
 }
 	
+sub object_totals_desc { sprintf '   r   v   i   t   c  S' }
+
+sub object_totals {
+        my ($o, $database, $mode ) = @_;
+        return unless $mode =~ /^ (all | shared | noshared ) $/ox ;
+        my $dh = dbconnect ( $o, form_dsn($o,$database)  ) or return;
+	my $st;
+
+	if ($mode eq 'all') {
+		($st = $dh->{dbh}->prepare(<<""))->execute()   
+			 select relkind, count(2) from pg_class group by 1
+
+	}else{
+	 	my $shared = $mode eq 'shared' ? 'true' : 'false';
+		($st=$dh->{dbh}->prepare(<<""))->execute( $shared );   
+			 select relkind, count(2) from pg_class 
+			 where relisshared = ?
+                         group by 1
+
+	}
+
+        my $r ; 
+        $r->{ $_->{relkind}} = $_->{count} while $_=$st->fetchrow_hashref;
+        [ sprintf ' %3s %3s %3s %3s %3s %2s', $r->{r}, $r->{v}, $r->{i},
+                                              $r->{t}, $r->{c}, $r->{S} 
+	]
+
+}
+
 
 1;
 __END__

@@ -1,5 +1,12 @@
 Revision history for Perl extension Pg::Pcurse.
 
+0.10  Wed May  7 09:39:46 2008
+	- In 'database' mode, 'D' displays count of objects
+	- In 'settings' mode, 'D' displays fsm rel and pages
+	- less clutter in standard 'database' mode
+	- bief summary for buffercache (if available)
+	- Schema table is disabled when not needed
+
 0.09  Wed May  7 08:55:42 2008
 	- minor code refactoring
 	- query refactoring

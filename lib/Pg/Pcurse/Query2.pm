@@ -7,14 +7,13 @@ use base 'Exporter';
 use Data::Dumper;
 use strict;
 use warnings;
-our $VERSION = '0.08';
+our $VERSION = '0.10';
 use Pg::Pcurse::Query0;
 
 
 our @EXPORT = qw( 
 	tables_brief_desc     tables_brief 
 	actual_tables_rows    estimated_tables_rows
-
 );
 
 
@@ -97,14 +96,6 @@ sub actual_tables_rows {
 
 }
 
+
 1;
 __END__ 
------------
-	for my $relname ( map {@$_} @{ $dh->fetchall_arrayref} ) { 
-                                        
-	for my $relname ( map {@$_} @{ $dh->fetchall_arrayref} ) { 
-	($_{ $relname }) = $dh->select_one_to_array(
-                                      'count(1)',
-                                     "${schema}.${relname}")
-	}
-	\%_ ;

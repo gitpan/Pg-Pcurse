@@ -9,7 +9,7 @@ use Curses::Widgets::Label;
 use strict;
 use warnings;
 use Pg::Pcurse;
-our $VERSION = '0.06';
+our $VERSION = '0.10';
 
 
 use base 'Exporter';

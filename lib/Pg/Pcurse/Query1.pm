@@ -7,7 +7,7 @@ use base 'Exporter';
 use Data::Dumper;
 use strict;
 use warnings;
-our $VERSION = '0.08';
+our $VERSION = '0.10';
 use Pg::Pcurse::Misc;
 use Pg::Pcurse::Query0;
 
@@ -16,12 +16,11 @@ our @EXPORT = qw(
         get_proc_desc  get_proc        tables_vacuum2
         get_setting    table_buffers   over_dbs
         analyze_tbl    analyze_db      vacuum_per_table
-	vacuum_tbl     vacuum_db       
+	vacuum_tbl     vacuum_db       fsm_settings
 	reindex_tbl    reindex_db      table_stat
-
 	get_tables2_desc         tables_vacuum_desc   
 	bucardo_conf_desc 	 bucardo_conf
-        pgbuffercache            
+        pgbuffercache            buffercache_summary
 	get_nspacl               
 
 	all_databases_desc       all_databases 
@@ -522,7 +521,7 @@ sub over_dbs {
                                      datconfig      datacl        blks_read
                                      blks_hit       xact_commit   xact_rollback
 				     tup_returned   tup_fetched   tup_inserted
-				     tup_updated    tup_deleted
+				     tup_updated    tup_deleted   oid
                                  ), 'age(datfrozenxid)',
 	      'pg_size_pretty( pg_database_size(pg_database.datname)) as size',
                                 ],
@@ -533,6 +532,7 @@ sub over_dbs {
                        });
 
         [ sprintf( '%-18s : %s', 'database'      , $h->{datname}        ),
+          sprintf( '%-18s : %s', 'oid'           , $h->{oid}            ),
           sprintf( '%-18s : %s', 'dba'           , $h->{dba}            ),
           sprintf( '%-18s : %s', 'encoding'      , $h->{encoding}  ),
           sprintf( '%-18s : %s', 'istemplate'    , $h->{datistemplate}  ),
@@ -541,7 +541,6 @@ sub over_dbs {
           sprintf( '%-18s : %s', 'lastsysoid'    , $h->{datlastsysoid}  ),
           sprintf( '%-18s : %s', 'frozenxid'     , $h->{datfrozenxid}   ),
           sprintf( '%-18s : %s', 'age'           , $h->{age}            ),
-          sprintf( '%-18s : %s', 'tablespace'    , $h->{dattablespace}  ),
           sprintf( '%-18s : %s', 'config'        , $h->{datconfig}
                                                    &&"@{$h->{datconfig}}" ),
           sprintf( '%-18s : %s', 'acl', $h->{datacl} && "@{$h->{datacl}}" ),
@@ -552,6 +551,7 @@ sub over_dbs {
           sprintf( '%-18s : %s', 'xact_commit'   , $h->{xact_commit}    ),
           sprintf( '%-18s : %s', 'xact_rollback' , $h->{xact_rollback}  ),
           sprintf( '%-18s : %s', 'pg_size'       , $h->{size}           ),
+          sprintf( '%-18s : %s', 'tablespace'    , $h->{dattablespace}  ),
           sprintf( '%-18s : %s', 'tup_returned'  , $h->{tup_returned}   ),
           sprintf( '%-18s : %s', 'tup_fetched'   , $h->{tup_fetched}    ),
           sprintf( '%-18s : %s', 'tup_inserted'  , $h->{tup_inserted}   ),
@@ -638,11 +638,11 @@ sub table_stat {
 
 	[@$r1,@$r2]
 }
-sub all_databases_desc {
+sub all_databases_desc_old {
           sprintf '%-15s %8s %14s %8s %8s %8s %8s', 'NAME', 'BENDS','COMMIT',
                               'ROLL','% READ', 'AGE', '';
 }
-sub all_databases {
+sub all_databases_old {
 	my ($o) = @_;
 	my $dsn =  form_dsn ($o, '');
 	my $dh  = dbconnect( $o, $dsn  ) or return;
@@ -662,16 +662,6 @@ sub all_databases {
 		       @{ $st->fetchall_arrayref} ];
 }
 
-sub search4func {
-	my ( $o, $func, @dbs) = @_ ;
-	for my $d (@dbs) {
-		my $dh = dbconnect ( $o, form_dsn($o, $d) ) or next; 
-		my $h    = $dh->select_one_to_hashref( 'proname', 'pg_proc',  
-			[ 'proname','=', $dh->quote($func) ] ) ;
-		return $d if exists $h->{proname};
-	}
-	return ;
-}
 
 sub pgbuffercache {
         my ($o, $database )= @_;
@@ -701,6 +691,111 @@ sub pgbuffercache {
 	}
 }   
 
+sub fsm_settings {
+        my ($o, $database )= @_;
+        my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+
+	my $h = $dh->{dbh}->selectall_arrayref(<<"");
+	   select 
+	   (select setting from pg_settings where name='max_fsm_relations') ,
+	   (select setting from pg_settings where name='max_fsm_pages') 
+
+        my ($max_fsm_rel, $max_fsm_pages) = map { @{$_}[0..1]}  @$h ;
+        my $ret1 = [ sprintf( '%-15s: %10s', 'max_fsm_rel'  , $max_fsm_rel  ), 
+                     sprintf( '%-15s: %10s', 'max_fsm_pages', $max_fsm_pages),
+                   ];
+
+        # more results if we can fsm functions are installed, and we are super
+        $h = $dh->select_one_to_hashref(<<"");
+           user in (select rolname from pg_roles where rolsuper) as super
+
+        return $ret1  unless $h;
+	my $db_of_func = search4func( $o, 'pg_freespacemap_pages',
+                                        $database, databases2 $o ) ;
+
+	return $ret1  unless $db_of_func;
+        $dh = dbconnect ( $o, form_dsn($o, $db_of_func ) ) ;
+        my $stored_rel = $dh->select_one_to_hashref( 'count(1)',
+				  'pg_freespacemap_relations');
+        my $stored_pages = $dh->select_one_to_hashref( 'sum(storedpages)',
+                                  'pg_freespacemap_relations');
+        my $ret2 = [ 
+		sprintf( '%-15s: %10s', 'fsm_rel'  , $stored_rel->{count}), 
+		sprintf( '%-15s: %10s', 'fsm_pages', $stored_pages->{sum}),
+                   ];
+        my $st = $dh->select( {
+                 fields=>[qw(  datname      relfilenode::regclass
+			       avgrequest   interestingpages  storedpages     
+                         )], 
+		 table =>'pg_freespacemap_relations, pg_database',
+		 join  =>'pg_database.oid=pg_freespacemap_relations.reldatabase'
+                 });
+
+	my $ret3= [
+                '', sprintf( '%-10s %-31s %5s %5s %5s', '', '', 'avg.req',
+                                             'intrest.', ' stored',
+
+                    ),
+		map { sprintf '%-10s %-33s %5s %5s %5s', @{$_}[0..4] }
+               @{ $st->fetchall_arrayref}
+        ];
+
+        [ @$ret1, @$ret2, @$ret3 ];
+}
+sub all_databases_desc {
+          sprintf '%-15s %8s %8s %8s %18s', 'NAME', 'BENDS','COMMIT',
+                              '% READ',
+}
+sub all_databases {
+	my ($o) = @_;
+	my $dsn =  form_dsn ($o, '');
+	my $dh  = dbconnect( $o, $dsn  ) or return;
+        my $st  = $dh->select({
+                fields=> [qw( pg_database.datname numbackends 
+                              xact_commit         xact_rollback
+                              blks_read           blks_hit 
+                              age(datfrozenxid)
+                              pg_catalog.pg_encoding_to_char(encoding) 
+                          )],
+                table=>'pg_stat_database,pg_database',
+                join=>'pg_stat_database.datname=pg_database.datname',
+                });
+
+       [ sort map { sprintf '%-15s %8s%10s%7.2f %9s %-12s', 
+	             @{$_}[0..2],  calc_read_ratio(@{$_}[4..5]), 
+                   }
+
+		       @{ $st->fetchall_arrayref} ];
+}
+sub buffercache_summary {
+        my ($o, $database )= @_;
+        my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+
+        my $h = $dh->select_one_to_hashref(<<"");
+           user in (select rolname from pg_roles where rolsuper) as super
+
+        return [ q(Must be in a "super" role to view buffer data.) ]
+                     unless $h->{super};
+        my $db_of_func = search4func( $o, 'pg_buffercache_pages',
+                                        $database, databases2 $o ) ;
+        return [q(public.pg_buffercache found in any database.)]
+                   unless $db_of_func;
+        $dh = dbconnect ( $o, form_dsn($o, $db_of_func ) ) or return;
+
+	$h = $dh->select_one_to_hashref(
+	[ '(select count(*) from pg_buffercache) as total',
+'(select count(*) from pg_buffercache where relfilenode is not null) as taken',
+'(select count(*) from pg_buffercache where relfilenode is null) as empty',
+'(select count(*) from pg_buffercache where relfilenode is not null
+and usagecount>1) as "usage>1"',
+] ); 
+
+	[ sprintf( '%-10s : %s', 'total'  , $h->{total}),
+	  sprintf( '%-10s : %s', 'empty'  , $h->{empty}),
+	  sprintf( '%-10s : %s', 'taken'  , $h->{taken}),
+	  sprintf( '%-10s : %s', 'usage>1', $h->{'usage>1'}),
+	]
+
+}
 
 1;
-__END__

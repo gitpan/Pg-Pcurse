@@ -22,7 +22,7 @@ use Pg::Pcurse::Query1;
 use Pg::Pcurse::Query2;
 use Pg::Pcurse::Query3;
 
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 
 our $opt;
 
@@ -69,6 +69,11 @@ sub update_schema_display {
         ($::sname) = first_word( $::she->[ $::schemas->getField('VALUE')] );
 }
 
+sub disable_schema_display {
+	return unless $::schemas;
+	$::schemas->setField( LISTITEMS => [], CAPTION=>'' );
+	$::schemas->draw($::mwh);
+}
 sub update_big_display {
         # Result Table ( like relevant tables, indexes, objects, etc,. )
        ($::desc, $::actual) = @_ ;
@@ -77,12 +82,20 @@ sub update_big_display {
         $::big     = big_listbox( $::desc, $::tab, 11, 0);
         $::big->execute($::mwh,0);
 }
+sub big_display_only { 
+	disable_schema_display ; 
+        goto &update_big_display;
+}
 sub whole_movie {
         ($::desc, $::actual) = @_ ;
 	update_schema_display( $::desc, $::actual );
 	update_big_display( $::desc, $::actual) ;
 }
 
+sub show_settings { big_display_only( sub{''}, \& all_settings  ) }
+sub show_databases{ big_display_only( \& all_databases_desc,\& all_databases) } 
+sub show_buffers  { big_display_only( sub{''}, \& table_buffers )} 
+sub show_bucardo  { big_display_only( \& bucardo_conf_desc, \& bucardo_conf)} 
 
 sub show_stats   { whole_movie( \&table_stats_desc, \&table_stats       )  }
 sub show_vacuum  { whole_movie( \&tables_vacuum_desc, \&tables_vacuum   )  }
@@ -94,13 +107,6 @@ sub show_rules   { whole_movie( \&rules_desc, \&rules                   )  }
 sub show_triggers{ whole_movie( \&schema_trg_desc, \&schema_trg         )  }
 sub show_users   { whole_movie( \&get_users_desc, \&get_users           )  }
 
-sub show_databases{ update_big_display( \& all_databases_desc,\& all_databases)}
-#sub show_settings { update_big_display( sub{''}, \& all_settings  )}
-sub show_buffers  { update_big_display( sub{''}, \& table_buffers )} 
-sub show_bucardo  { update_big_display( \& bucardo_conf_desc, \& bucardo_conf)} 
-sub show_settings { 
-	update_big_display( sub{''}, \& all_settings  )
-}
 
 
 ## Another dispatcher
@@ -133,7 +139,12 @@ sub retrieve_context {
 ### The following functions are colled from the above dispatcher
 sub stats2 { [table_stats2_desc,  @{table_stats2($opt, $::dbname, $::sname )}]}
 sub vacuum2{ [@{tables_vacuum2( $opt, $::dbname)  }]}
-sub bufferca{ [@{ pgbuffercache( $opt, $::dbname) }]}
+sub bufferca{ 
+	[ @{buffercache_summary( $opt, $::dbname)} ,
+	  '','',
+	  @{ pgbuffercache( $opt, $::dbname)} ,
+        ]
+}
 
 #sub indexes{ [index2_desc,  @{index2($opt, $::dbname, $::sname )}] }
 #sub procedu{ [get_proc_desc,  @{get_proc($opt, $::dbname, $::sname )}] }
@@ -225,8 +236,10 @@ sub tstat {
 ##########################################################################
 ## Another dispatcher
 sub capital_context {
-	return  unless $::mode eq 'tables';
-        ({  tables     => \& tdataof  ,
+	return  unless $::mode =~ /^ (tables|settings|databases) $/xo;
+        ({  tables     => \& tdataof ,
+            settings   => \& fsmvals ,
+            databases  => \& dbof    ,
          }->{$::mode||return})->(@_) ;
 }
 
@@ -235,6 +248,22 @@ sub tdataof {
         my $index = $::big->getField('VALUE');
         my ($f) = first_word( $::tab->[$index] );
         tbl_data_of( $opt, $::dbname, $::sname, $f ) or return [];
+}
+sub dbof {
+        my $index = $::big->getField('VALUE');
+        my ($f) = first_word( $::tab->[$index] );
+        my $title  = object_totals_desc;
+        my $r1     = object_totals( $opt, $f, 'all'     );
+        my $r2     = object_totals( $opt, $f, 'shared'  );
+        my $r3     = object_totals( $opt, $f, 'noshared');
+	[ $f, '', $title, '' , 
+          "@$r1" . "\t\t totals", 
+          "@$r2" . "\t\t shared", 
+          "@$r3" . "\t\t not shared", 
+        ];
+}
+sub fsmvals {
+        fsm_settings( $opt, $::dbname ) or return [];
 }
 
 ##########################################################################
