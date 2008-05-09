@@ -7,7 +7,7 @@ use base 'Exporter';
 use Data::Dumper;
 use strict;
 use warnings;
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 use Pg::Pcurse::Query0;
 
 

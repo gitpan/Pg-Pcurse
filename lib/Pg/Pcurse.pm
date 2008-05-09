@@ -22,7 +22,7 @@ use Pg::Pcurse::Query1;
 use Pg::Pcurse::Query2;
 use Pg::Pcurse::Query3;
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 our $opt;
 
@@ -71,7 +71,8 @@ sub update_schema_display {
 
 sub disable_schema_display {
 	return unless $::schemas;
-	$::schemas->setField( LISTITEMS => [], CAPTION=>'' );
+	my $misc = misc_system_wide($opt);
+	$::schemas->setField( LISTITEMS =>$misc, CAPTION=>'' );
 	$::schemas->draw($::mwh);
 }
 sub update_big_display {

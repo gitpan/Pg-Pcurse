@@ -7,7 +7,7 @@ use base 'Exporter';
 use Data::Dumper;
 use strict;
 use warnings;
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 use Pg::Pcurse::Misc;
 use Pg::Pcurse::Query0;
 
@@ -638,30 +638,6 @@ sub table_stat {
 
 	[@$r1,@$r2]
 }
-sub all_databases_desc_old {
-          sprintf '%-15s %8s %14s %8s %8s %8s %8s', 'NAME', 'BENDS','COMMIT',
-                              'ROLL','% READ', 'AGE', '';
-}
-sub all_databases_old {
-	my ($o) = @_;
-	my $dsn =  form_dsn ($o, '');
-	my $dh  = dbconnect( $o, $dsn  ) or return;
-        my $st  = $dh->select({
-                fields=> [qw( pg_database.datname numbackends 
-                              xact_commit         xact_rollback
-                              blks_read           blks_hit 
-                              age(datfrozenxid)
-                              pg_catalog.pg_encoding_to_char(encoding) 
-                          )],
-                table=>'pg_stat_database,pg_database',
-                join=>'pg_stat_database.datname=pg_database.datname',
-                });
-
-       [ sort map { sprintf '%-15s %8s%15s%10s%7.2f %9s %-12s', 
-	@{$_}[0..3],  calc_read_ratio(@{$_}[4..5]), @{$_}[6..7] }  
-		       @{ $st->fetchall_arrayref} ];
-}
-
 
 sub pgbuffercache {
         my ($o, $database )= @_;
@@ -756,13 +732,15 @@ sub all_databases {
                               blks_read           blks_hit 
                               age(datfrozenxid)
                               pg_catalog.pg_encoding_to_char(encoding) 
-                          )],
+                          ),
+	               'pg_size_pretty( pg_database_size(pg_database.datname))',
+	                 ],
                 table=>'pg_stat_database,pg_database',
                 join=>'pg_stat_database.datname=pg_database.datname',
                 });
 
-       [ sort map { sprintf '%-15s %8s%10s%7.2f %9s %-12s', 
-	             @{$_}[0..2],  calc_read_ratio(@{$_}[4..5]), 
+       [ sort map { sprintf '%-15s %8s%10s%7.2f %9s %-12s %12s', 
+	             @{$_}[0..2],  calc_read_ratio(@{$_}[4..5]), ${$_}[-1]
                    }
 
 		       @{ $st->fetchall_arrayref} ];

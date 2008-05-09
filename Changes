@@ -1,6 +1,11 @@
 Revision history for Perl extension Pg::Pcurse.
 
-0.10  Wed May  7 09:39:46 2008
+0.11  Wed May  9 06:48:31 2008
+        - Display postmaster start time in some modes
+        - Display txid_current in some modes
+        - Prevent crashes with restricted databases
+
+0.10  Wed May  8 09:39:46 2008
 	- In 'database' mode, 'D' displays count of objects
 	- In 'settings' mode, 'D' displays fsm rel and pages
 	- less clutter in standard 'database' mode

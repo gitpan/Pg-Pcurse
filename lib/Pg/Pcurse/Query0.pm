@@ -7,13 +7,14 @@ use base 'Exporter';
 use Data::Dumper;
 use strict;
 use warnings;
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 use Pg::Pcurse::Misc;
 
 our @EXPORT = qw( 
 	form_dsn     first_word   databases      databases2 
 	dbconnect    to_d         to_h           search4func 
 	one_type     types2text   object_totals  object_totals_desc
+	misc_system_wide 
 );
 sub search4func {
         my ( $o, $func, @dbs) = @_ ;
@@ -133,6 +134,19 @@ sub object_totals {
 
 }
 
+sub misc_system_wide {
+        my ( $o ) = @_ ;
+        my $dh = dbconnect ( $o, form_dsn($o,'')) or return;
+
+	my $h0 = $dh->select_one_to_hashref(
+		'pg_postmaster_start_time()::timestamp(0) as start' );
+
+	my $h1 = $dh->select_one_to_hashref( 'txid_current()' );
+
+	[ sprintf( '%-17s : %15s', 'postmaster start', $h0->{start}     ), 
+	  sprintf( '%-17s : %15s', 'txid current', $h1->{txid_current}  ),
+        ];
+}
 
 1;
 __END__
