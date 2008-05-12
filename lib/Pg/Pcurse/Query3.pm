@@ -7,7 +7,7 @@ use base 'Exporter';
 use Data::Dumper;
 use strict;
 use warnings;
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 use Pg::Pcurse::Misc;
 use Pg::Pcurse::Query0;
 
@@ -57,6 +57,13 @@ sub statsoftable {
         ];
 }
 
+sub beautify_src {
+	my $src = shift||return'';
+($src) =~ /\S.*\S/gs;
+$src =~ s/^\s*//mg;
+#$src =~ s/\n/ /smg;
+ Curses::Widgets::textwrap($src, 40);
+}
 sub proc_of {
         my ($o, $database, $oid )= @_;
         my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
@@ -83,7 +90,6 @@ sub proc_of {
 	  sprintf( '%-12s : %s', 'owner',    $h->{owner}       ),
 	  sprintf( '%-12s : %s', 'lang',     $h->{lanname}     ),
 	  sprintf( '%-12s : %s', 'desc',     $h->{desc}        ),
-	  sprintf( '%-12s : %s', 'src',      $h->{prosrc}      ),
 	  sprintf( '%-12s : %s', 'rows',     $h->{prorows}     ),
 	  sprintf( '%-12s : %s', 'isagg',    $h->{proisagg}    ),
 	  sprintf( '%-12s : %s', 'secdef',   $h->{prosecdef}   ),
@@ -100,9 +106,8 @@ sub proc_of {
 	  sprintf( '%-12s : %s', 'volatile', $h->{provolatile} ),
 	  sprintf( '%-12s : %s', 'config',   $h->{proconfig}   ),
 	  sprintf( '%-12s : %s', 'cost',     $h->{procost}     ),
-	  #sprintf( '%-12s : %s', 'src',     ($h->{prosrc})
-          #?  "@{[ Curses::Widgets::textwrap($h->{prosrc}, 40)]}"
-          #: ''  ),
+	  '',
+          beautify_src( $h->{prosrc} ),
 	];
 }
       
@@ -119,42 +124,12 @@ sub view_of {
                                               'and viewname','=', $view ]);
 	$h->{definition} ;
 }
-sub rule_of {
-	my ($o, $database , $schema, $rule) = @_;
-        $database or $database = $o->{dbname} ;
-	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
-	$schema = $dh->quote($schema);
-	$rule   = $dh->quote($rule);
-        my $h   = $dh->select_one_to_hashref (  
-                                'definition', 'pg_rules',
-                               ['schemaname', '=', $schema , 
-                                'and', 'rulename', '=', $rule ]) ;
-
-	sprintf '%-35s',  $h->{definition} ;
-}
 sub max_length_keys {
 	my $max=0;
 	for (@_) {
 		if (length$_ > $max) { $max = length$_};
 	}
 	$max;
-}
-sub tbl_data_of {
-	my ($o, $database , $schema, $table) = @_;
-        $database or $database = $o->{dbname} ;
-	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
-	my $st  = $dh->select('*', "$schema.$table" );
-	#my $len = max_length_keys( keys %$h);
-	my ($i, @ret) = (0);
-	while (my $h   = $st->fetchrow_hashref) {
-		push @ret,
-		sprintf '-[ RECORD  %3s ]-------------------------', $i++;
-		while( my ($k,$v) = each %$h) {
-			push @ret,
-		        sprintf '%-20s : %s', $k, $v ; 
-		}
-	}
-	return [ @ret ];
 }
 sub bucardo_conf_of {
         my ($o, $setting) = (@_);
@@ -248,6 +223,49 @@ sub user_of {
         #  sprintf( '%-14s : %-s', 'config'    , $h->{rolconfig}      ),
 	]
 }
+sub tbl_data_of {
+	my ($o, $database , $schema, $table) = @_;
+        $database or $database = $o->{dbname} ;
+	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
+	(my $st  = $dh->{dbh}->prepare(<<""))->execute;
+			select xmin, * from  $schema.$table
+			order by age(xmin) desc
+			limit 20
 
+	my ($i,@ret) = 0;
+	while ( my $h= $st->fetchrow_hashref ) {	
+		push @ret,
+		sprintf( '-[ RECORD  %3s ]-------------------------', $i++),
+		sprintf '%-20s : %s', 'xmin', $h->{xmin} ; 
+		while( my ($k,$v) = each %$h) {
+			next if $k eq 'xmin';
+			push @ret,
+		        sprintf '%-20s : %s', $k, $v ; 
+		}
+		last if $i>20;
+	}
+	return [ @ret ];
+}
+
+sub formatrule {
+	my $all = shift;
+	my ($l1, $rest)  = $all =~ m/^(.*AS\s*)(\bON\b.*)/sxgi;
+	my ($l2, $more)  = $rest =~ m/^(.*)(\bDO\b.*)/xgsi;
+        [ $l1, $l2, Curses::Widgets::textwrap($more,60)];
+}
+
+sub rule_of {
+	my ($o, $database , $schema, $rule) = @_;
+        $database or $database = $o->{dbname} ;
+	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
+	$schema = $dh->quote($schema);
+	$rule   = $dh->quote($rule);
+        my $h   = $dh->select_one_to_hashref (  
+                                'definition', 'pg_rules',
+                               ['schemaname', '=', $schema , 
+                                'and', 'rulename', '=', $rule ]) ;
+
+	 formatrule( $h->{definition} )  ;
+}
 1;
 __END__

@@ -15,7 +15,7 @@ It is too simple:
    Keep pressing 'd' to view more on results.
    'A'  key attemps to analyze the table, or database
    'V'  key attemps to vacume  the table, or database
-   In tables   mode, 'D' displays table records (CAUTION: not for long tables)
+   In tables   mode, 'D' displays the youngest 20 rows of table 
    In database mode, 'D' displays count of database objects
    In settings mode, 'D' displays fsm data (contrib module pg_freespacemap.sql)
    TBB (or 'l') takes you back to the starting menu.

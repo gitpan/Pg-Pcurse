@@ -7,7 +7,7 @@ use base 'Exporter';
 use Data::Dumper;
 use strict;
 use warnings;
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 use Pg::Pcurse::Misc;
 use Pg::Pcurse::Query0;
 
@@ -28,6 +28,7 @@ our @EXPORT = qw(
 	get_tables_all_desc      get_tables_all
 	get_views_all_desc       get_views_all
 	index2_desc              index2 
+	index3_desc              index3 
 	get_index_desc           get_index 
 	table_stats_desc         table_stats 
 	table_stats2_desc        table_stats2 
@@ -246,13 +247,6 @@ sub table_stats2 {
 
 }
 
-sub all_settings {
-	my ($o)= @_;
-	my $dh = dbconnect ( $o, form_dsn($o,'') ) or return;
-	my $st = $dh->select([qw(name setting unit)], 'pg_settings')  or return;
-	[ map { sprintf '%-34s%19s%10s', $_->[0], $_->[1]||'', $_->[2]||'' }
-          @{$st->fetchall_arrayref} ];
-} 
 sub get_setting {
 	my ($o,$name) = @_;
 	return unless $name;
@@ -272,50 +266,12 @@ sub get_setting {
           sprintf( '%-9s : %s', 'sourse'  , $h->{sourse}  || ''),
 	  sprintf( '%-9s : %s', 'category', $h->{category}|| ''), 
 	  '',
-	  sprintf( '%-70s', $h->{short_desc}||''),
+	  Curses::Widgets::textwrap($h->{short_desc},75),
 	  '',
-#TODO
-	  Curses::Widgets::textwrap($h->{prosrc},30),
+	  Curses::Widgets::textwrap($h->{extra_desc},75),
         ] 
 } 
 
-sub get_index_desc {
-        sprintf('%-14s%-10s',  'NAME',  'u  p c v r xmin');
-}
-sub get_index {
-        my ($o, $database ,  $indexrelid) = @_;
-        my $dh   =  dbconnect ( $o, 'dbi:Pg:dbname='. $database  ) or return;
-        my $qin  =  $dh->quote( $indexrelid );
-
-        my $h  = $dh->select_one_to_hashref(
-                 [  qw( indexrelid::regclass 
-                     indrelid        indnatts   indisunique   indisprimary 
-                     indisclustered  indisvalid indcheckxmin  indisready 
-                     indkey indclass indoption  indexprs      indpred
-                  )],
-                 'pg_index',
-                  [ 'indexrelid','=', $qin]);
-
-        [ sprintf( '%-14s : %s', 'name'       , $h->{indexrelid}    ),
-          sprintf( '%-14s : %s', 'exrelid'    , $indexrelid         ),
-          sprintf( '%-14s : %s', 'relid'      , $h->{indrelid}      ),
-          sprintf( '%-14s : %s', 'natts'      , $h->{indnatts}      ),
-          sprintf( '%-14s : %s', 'isunique'   , $h->{indisunique}   ),
-          sprintf( '%-14s : %s', 'isprimary'  , $h->{indisprimary}  ),
-          sprintf( '%-14s : %s', 'isclustered', $h->{indisclustered}),
-          sprintf( '%-14s : %s', 'isvalid'    , $h->{indisvalid}    ),
-          sprintf( '%-14s : %s', 'checkxmin'  , $h->{indcheckxmin}  ),
-          sprintf( '%-14s : %s', 'isready'    , $h->{indisready}    ),
-          sprintf( '%-14s : %s', 'key'        , $h->{indkey}        ),
-          sprintf( '%-14s : %s', 'key'        , $h->{indkey}        ),
-          sprintf( '%-14s : %s', 'class'      , $h->{indclass}      ),
-          sprintf( '%-14s : %s', 'option'     , $h->{indoption}     ),
-          sprintf( '%-14s : %s', 'exprs'      , $h->{indexprs}      ),
-          sprintf( '%-14s : %s', 'pred'       , $h->{indpred}       ),
-        ]
-
-}
-      
 
 sub get_nspacl {
 	my ($o, $database, $schema) = @_;
@@ -740,6 +696,7 @@ sub all_databases {
                 });
 
        [ sort map { sprintf '%-15s %8s%10s%7.2f %9s %-12s %12s', 
+			#TODO sometimes we get an undef that warns
 	             @{$_}[0..2],  calc_read_ratio(@{$_}[4..5]), ${$_}[-1]
                    }
 
@@ -775,5 +732,89 @@ and usagecount>1) as "usage>1"',
 	]
 
 }
+sub all_settings {
+	my ($o,undef,undef, $context)= @_;
+	my $dh = dbconnect ( $o, form_dsn($o,'') ) or return;
+	my $st;
+	if ($context =~ /^all/xoi ) {
+		$st = $dh->select([qw(name setting unit)], 'pg_settings');
+        }else{
+		$st = $dh->select([qw(name setting unit)], 
+                             'pg_settings', ['context', 'ilike', 
+                                    $dh->quote($context)])  or return;
+	}
+	[ map { sprintf '%-34s%19s%10s', $_->[0], $_->[1]||'', $_->[2]||'' }
+          @{$st->fetchall_arrayref} ];
+} 
+sub index2_desc_ {
+     sprintf '%-30s%-10s%-10s %-10s %-10s','NAME', 'relname',
+                    'idx_scan', 'idx_tup_read','idx_tup_fetch'
+}
+sub index3_desc {
+     sprintf '%-30s %11s %8s %10s %13s','NAME', 'tuples',
+                    'pages', 'idx_scan', 'idx_tup_fetch',
+}
+sub index3 {
+	my ($o, $database , $schema) = @_;
+	my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+	$schema = $dh->quote( $schema );
+	my $h = $dh->{dbh}->selectall_arrayref( <<"");
+		select indexrelname, reltuples, relpages,  idx_scan,
+		       idx_tup_fetch,   indexrelid
+		 from        pg_stat_user_indexes s
+			join pg_class c on ( c.relname = s.indexrelname )
+		 where schemaname = 'hip'
+		 order by 1
+
+        [ map { sprintf '%-30s  %10s  %5s %8s %8s %90s', @{$_}[0..5] }
+	      @$h ]
+
+}
+
+sub get_index_desc {
+        sprintf('%-14s%-10s',  'NAME',  'u  p c v r xmin');
+}
+sub get_index {
+        my ($o, $database ,  $indexrelid) = @_;
+        my $dh   =  dbconnect ( $o, 'dbi:Pg:dbname='. $database  ) or return;
+        my $qin  =  $dh->quote( $indexrelid );
+
+        my $h  = $dh->select_one_to_hashref({
+              fields=>
+                 [ qw( indexrelid::regclass     indrelid::regclass 
+                       indnatts        indisunique indisprimary 
+                       indisclustered  indisvalid  indcheckxmin  indisready 
+                       indkey indclass indoption   indexprs      indpred
+		       relpages        reltuples ),
+		     'pg_get_userbyid(relowner) as owner',
+		     'pg_size_pretty(pg_relation_size(indexrelid)) as siz',
+	         ],
+		table=> 'pg_index, pg_class',
+		join => 'pg_index.indexrelid=pg_class.oid',
+                where=> [ 'indexrelid','=', $qin] }) ;
+
+        [ sprintf( '%-14s : %s', 'name'       , $h->{indexrelid}    ),
+          sprintf( '%-14s : %s', 'exrelid'    , $indexrelid         ),
+          sprintf( '%-14s : %s', 'relid'      , $h->{indrelid}      ),
+          sprintf( '%-14s : %s', 'relpages'   , $h->{relpages}      ),
+          sprintf( '%-14s : %s', 'reltuples'  , $h->{reltuples}     ),
+          sprintf( '%-14s : %s', 'owner'      , $h->{owner}         ),
+          sprintf( '%-14s : %s', 'size'       , $h->{siz}           ),
+          sprintf( '%-14s : %s', 'natts'      , $h->{indnatts}      ),
+          sprintf( '%-14s : %s', 'isunique'   , $h->{indisunique}   ),
+          sprintf( '%-14s : %s', 'isprimary'  , $h->{indisprimary}  ),
+          sprintf( '%-14s : %s', 'isclustered', $h->{indisclustered}),
+          sprintf( '%-14s : %s', 'isvalid'    , $h->{indisvalid}    ),
+          sprintf( '%-14s : %s', 'checkxmin'  , $h->{indcheckxmin}  ),
+          sprintf( '%-14s : %s', 'isready'    , $h->{indisready}    ),
+          sprintf( '%-14s : %s', 'key'        , $h->{indkey}        ),
+          sprintf( '%-14s : %s', 'class'      , $h->{indclass}      ),
+          sprintf( '%-14s : %s', 'option'     , $h->{indoption}     ),
+          sprintf( '%-14s : %s', 'exprs'      , $h->{indexprs}      ),
+          sprintf( '%-14s : %s', 'pred'       , $h->{indpred}       ),
+        ]
+
+}
+      
 
 1;

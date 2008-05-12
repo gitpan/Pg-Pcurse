@@ -6,17 +6,18 @@ use Curses::Widgets;
 use Carp::Assert;
 use Curses::Widgets::Menu;
 use Curses::Widgets::Label;
+use Curses::Widgets::ButtonSet;
 use strict;
 use warnings;
 use Pg::Pcurse;
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 
 use base 'Exporter';
 
 our @EXPORT = qw( 
 	          init_screen       init_mini_root
-	          create_root
+	          create_root       create_button
 		  create_commentbox
 	          create_menu
 	          create_botton 
@@ -83,7 +84,7 @@ sub _Database_Menu_Choice {
 }
 
 
-my @MODES = sort qw( Vacuum Stats Procedures Tables Views Users 
+my @MODES = sort qw( Vacuum Stats Procedures Tables Views Users Rules
                      Databases Buffers Indexes Settings Triggers Bucardo
              );
 sub form_dbmenu {
@@ -106,6 +107,7 @@ sub form_dbmenu {
                                 Settings   => sub { $::mode = 'settings'  },
                                 Triggers   => sub { $::mode = 'triggers'  },
                                 Bucardo    => sub { $::mode = 'bucardo'   },
+                                Rules      => sub { $::mode = 'rules'     },
 				   },	
                       About      =>{ ITEMORDER => [  
                                             "Version $Pg::Pcurse::VERSION",
@@ -372,5 +374,40 @@ sub label_sec {
 		   ALIGNMENT   => 'C',
         };
 }
+sub bscan {
+        my $mwh = shift;
+        my $key = -1;
+        while ($key eq -1) {
+                $key = $mwh->getch;
+                #if($key eq "k")  { return 259};  #ver
+                #if($key eq "j")  { return 258};  #ver
+                if($key eq "h")  { return 260};  #horz
+                if($key eq "k")  { return 261};  #horz
+                if($key eq "n")  { return 260};  #horz
+                if($key eq "m")  { return 261};  #horz
+                if($key eq "l")  { return "\t"};
+                if($key eq " ")  { return "\n"};
+        }
+        return $key;
+}
+
+sub create_button {
+        my ( $choices, $cols, $x,$y) = @_;
+        new Curses::Widgets::ButtonSet   {
+           LABELS      => $choices,
+           LENGTH      => $cols,
+           INPUTFUNC   => \&bscan,
+           FOREGROUND  => 'white',
+           BACKGROUND  => 'blue',
+           BORDER      => 1,
+           BORDERCOL   => 'red',
+           FOCUSSWITCH => "\t\n",
+           HORIZONTAL  => 1,
+           PADDING     => 0,
+           X           => $x,
+           Y           => $y,
+        }
+}
+
 
 1;

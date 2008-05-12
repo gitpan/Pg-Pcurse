@@ -7,7 +7,7 @@ use base 'Exporter';
 use Data::Dumper;
 use strict;
 use warnings;
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 use Pg::Pcurse::Query0;
 
 
@@ -39,19 +39,19 @@ sub estimated_tables_rows {
 
 
 sub tables_brief_desc {
-	 sprintf '%-26s %12s %12s    %8s %8s', 'NAME', 'tupl', 'est_tupl',
-                                            'analyze', 'vacuum';
+	 sprintf '%-26s %12s %12s    %6s %10s', 'NAME', 'tupl', 'est_tupl',
+                                            'analyze', 'total_pages';
 }
 
 sub tables_brief {
-
 	my ($o, $database , $schema) = @_;
         $database or $database = $o->{dbname} ;
 	my $dh = dbconnect ( $o, form_dsn($o,$database)  ) or return;
         (my $st  = $dh->{dbh}->prepare(<<""))->execute($schema) or return ;
 	select relname,
 		greatest( last_vacuum,  last_autovacuum)  as vacuum,
-		greatest( last_analyze, last_autoanalyze) as analyze
+		greatest( last_analyze, last_autoanalyze) as analyze,
+		pg_total_relation_size(relid) as rsi
 	from pg_stat_all_tables
 	where schemaname= ?
 	order by 1
@@ -69,7 +69,8 @@ sub tables_brief {
 		(defined $estimated->{$relname} ? $estimated->{$relname} 
                                             : 'no_estima'),
 					to_h( $h->{analyze}), 
-                                        to_h( $h->{vacuum }) ;
+                                        #to_h( $h->{vacuum }) ;
+                                         $h->{rsi}/8192 ;
         }
         [ @arr ];
 }

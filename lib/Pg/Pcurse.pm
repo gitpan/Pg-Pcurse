@@ -6,23 +6,18 @@ package Pg::Pcurse;
 use 5.008008;
 use strict;
 use warnings;
-
 require Exporter;
 
 use Curses;
 use Curses::Widgets;
 use Carp::Assert;
-use Curses::Widgets::Menu;
-#use Curses::Widgets::Label;
-#use Curses::Widgets::ButtonSet;
-#use Curses::Widgets::Listbox;
 use strict;
 use Pg::Pcurse::Query0;
 use Pg::Pcurse::Query1;
 use Pg::Pcurse::Query2;
 use Pg::Pcurse::Query3;
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 our $opt;
 
@@ -36,6 +31,8 @@ our @EXPORT = qw(
 
 *secondary_listbox = *main::secondary_listbox;
 *big_listbox       = *main::big_listbox;
+*create_button     = *main::create_button;
+
 
 #########################################################################
 ## Main Dispatcher
@@ -79,7 +76,7 @@ sub update_big_display {
         # Result Table ( like relevant tables, indexes, objects, etc,. )
        ($::desc, $::actual) = @_ ;
         $::desc    = $::desc->();
-        $::tab     = $::actual->( $opt, $::dbname, $::sname);
+        $::tab     = $::actual->( $opt, $::dbname, $::sname, $::secname);
         $::big     = big_listbox( $::desc, $::tab, 11, 0);
         $::big->execute($::mwh,0);
 }
@@ -92,21 +89,31 @@ sub whole_movie {
 	update_schema_display( $::desc, $::actual );
 	update_big_display( $::desc, $::actual) ;
 }
+sub update_section_display {
+	my ($title, $choices) = @_ ;
+        $::section  = secondary_listbox( $title, $choices, 2,37);
+        $::section->execute($::mwh,0);
+        ($::secname) = first_word( $choices->[ $::section->getField('VALUE')]);
+}
 
-sub show_settings { big_display_only( sub{''}, \& all_settings  ) }
+sub show_settings { 
+        my $choi = [qw( All backend internal postmaster sighup superuser user)];
+	update_section_display ('Context', $choi);
+        update_big_display( sub{''}, \& all_settings);
+}
 sub show_databases{ big_display_only( \& all_databases_desc,\& all_databases) } 
 sub show_buffers  { big_display_only( sub{''}, \& table_buffers )} 
 sub show_bucardo  { big_display_only( \& bucardo_conf_desc, \& bucardo_conf)} 
+sub show_users    { big_display_only( \&get_users_desc, \&get_users     )  }
 
 sub show_stats   { whole_movie( \&table_stats_desc, \&table_stats       )  }
 sub show_vacuum  { whole_movie( \&tables_vacuum_desc, \&tables_vacuum   )  }
 sub show_tables  { whole_movie( \&tables_brief_desc, \&tables_brief     )  }
 sub show_views   { whole_movie( \&get_views_all_desc, \&get_views_all   )  }
 sub show_procedu { whole_movie( \&get_proc_desc, \&get_proc             )  }
-sub show_indexes { whole_movie( \&index2_desc, \&index2                 )  }
+sub show_indexes { whole_movie( \&index3_desc, \&index3                 )  }
 sub show_rules   { whole_movie( \&rules_desc, \&rules                   )  }
 sub show_triggers{ whole_movie( \&schema_trg_desc, \&schema_trg         )  }
-sub show_users   { whole_movie( \&get_users_desc, \&get_users           )  }
 
 
 
@@ -118,7 +125,7 @@ sub retrieve_permit {
 
 ## Another dispatcher
 sub retrieve_context {
-	#return if $::mode eq 'bucardo' ;
+	#return if $::mode eq 'rules' ;
         ({  
 	    tables     => \& tstat    ,
             views      => \& viewof   ,
@@ -171,7 +178,7 @@ sub ruleof {
         my $index = $::big->getField('VALUE');
         my ($f)   = first_word( $::tab->[$index] );
         my $text  = rule_of( $opt, $::dbname, $::sname, $f ) or return [];
-	[  textwrap($text, 50) ];
+	#[  textwrap($text, 50) ];
 }
 
 sub over2  { 
@@ -292,7 +299,7 @@ sub update_bigbox_inc {
 	$::big->setField( LISTITEMS => $::tab );
 }
 sub analyze  {
-        return unless $::mode =~ qr/^(tables|stats|databases)/o;
+        return unless $::mode =~ qr/^ (tables|stats|databases|vacuum) $/xo;
         ({ tables    => \&do_analyze_tbl,
            stats     => \&do_analyze_tbl,
            databases => \&do_analyze_db,
@@ -302,7 +309,7 @@ sub analyze  {
 }
 
 sub vacuum  {
-        return unless $::mode =~ qr/^(tables|stats|databases)/o;
+        return unless $::mode =~ qr/^ (tables|stats|databases|vacuum) $/xo;
         ({ tables    => \& do_vacuum_tbl,
            stats     => \& do_vacuum_tbl,
            databases => \& do_vacuum_db,
@@ -352,6 +359,11 @@ sub do_vacuum_db {
 
 
 
+sub  display_button {
+	my ($choices) = @_ ;
+        $::butt       = create_button( $choices, 4, 58, 8);
+        $::butt->execute($::mwh,0);
+}
 1;
 __END__
 # Below is stub documentation for your module. You'd better edit it!

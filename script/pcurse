@@ -12,7 +12,7 @@ use warnings;
 use Pg::Pcurse::Misc;
 use Pg::Pcurse::Query0;
 use Pg::Pcurse::Query1;
-use Pg::Pcurse::Query2;
+use Pg::Pcurse::Query3;
 
 *VERSION= *Pg::Pcurse::VERSION;
 
@@ -29,14 +29,14 @@ unless (my $dh = dbconnect ( $opt, form_dsn($opt, '' ) ) ) {
 	exit(0);
 }
 
-#print Dumper misc_system_wide( $opt); exit;
+#print Dumper proc_of( $opt, 'lessons',222853); exit;
 
 init_screen;
 $::mwh  = create_root;
 my $dbs  = [ databases2 $opt ];
 my $main = form_dbmenu ($dbs);
 undef $::db;
-$::mode='databases';
+$::mode='procedures';
 $::mode='tables';
 
 init_mini_root;
@@ -121,7 +121,7 @@ It is too simple:
    Keep pressing 'd' to view more on results.
    'A'  key attemps to analyze the table, or database
    'V'  key attemps to vacume  the table, or database
-   In tables   mode, 'D' displays table records (CAUTION: not for long tables)
+   In tables   mode, 'D' displays the youngest 20 rows of table
    In database mode, 'D' displays count of database objects
    In settings mode, 'D' displays fsm data (contrib module pg_freespacemap.sql)
    TBB (or 'l') takes you back to the starting menu.

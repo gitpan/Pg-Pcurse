@@ -1,5 +1,14 @@
 Revision history for Perl extension Pg::Pcurse.
 
+0.12  Mon May 12 06:52:36 2008
+        - schema table is disable for user mode
+        - added extra_desc for settings mode
+        - In tables mode, 'D' displays the youngest 20 rows of table
+        - In rules mode, beautify rule definition
+        - In settings mode, settings are now searchable by context
+        - In indexes mode, changed or added more fields
+        - In procedures mode, 'D' also displays the src
+
 0.11  Wed May  9 06:48:31 2008
         - Display postmaster start time in some modes
         - Display txid_current in some modes
