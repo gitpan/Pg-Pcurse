@@ -1,6 +1,7 @@
 #!/usr/bin/perl -l
 
 use lib qw( ../blib/lib ) ;
+use 5.008008;
 use Curses;
 use Pg::Pcurse;
 use Pg::Pcurse::Widget;
@@ -29,14 +30,13 @@ unless (my $dh = dbconnect ( $opt, form_dsn($opt, '' ) ) ) {
 	exit(0);
 }
 
-#print Dumper proc_of( $opt, 'lessons',222853); exit;
+#print Dumper tables_of_db( $opt, 'lessons',222853); exit;
 
 init_screen;
 $::mwh  = create_root;
 my $dbs  = [ databases2 $opt ];
 my $main = form_dbmenu ($dbs);
 undef $::db;
-$::mode='procedures';
 $::mode='tables';
 
 init_mini_root;

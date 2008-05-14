@@ -1,6 +1,7 @@
 # Copyright (C) 2008 Ioannis Tambouras <ioannis@cpan.org>. All rights reserved.
 # LICENSE:  GPLv3, eead licensing terms at  http://www.fsf.org .
 package Pg::Pcurse::Query3;
+use 5.008008;
 use DBIx::Abstract;
 use Carp::Assert;
 use base 'Exporter';
@@ -16,7 +17,7 @@ our @EXPORT = qw(
 	bucardo_conf_of  user_of
         proc_of		 view_of
         rule_of		 tbl_data_of              
-	trg_of
+	trg_of           tables_of_db      tables_of_db_desc
         statsoftable_desc        statsoftable 
 );
 
@@ -228,7 +229,7 @@ sub tbl_data_of {
         $database or $database = $o->{dbname} ;
 	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
 	(my $st  = $dh->{dbh}->prepare(<<""))->execute;
-			select xmin, * from  $schema.$table
+			select age(xmin), * from  $schema.$table
 			order by age(xmin) desc
 			limit 20
 
@@ -236,7 +237,7 @@ sub tbl_data_of {
 	while ( my $h= $st->fetchrow_hashref ) {	
 		push @ret,
 		sprintf( '-[ RECORD  %3s ]-------------------------', $i++),
-		sprintf '%-20s : %s', 'xmin', $h->{xmin} ; 
+		sprintf '%-20s : %s', 'age(xmin)', $h->{age} ; 
 		while( my ($k,$v) = each %$h) {
 			next if $k eq 'xmin';
 			push @ret,
@@ -266,6 +267,26 @@ sub rule_of {
                                 'and', 'rulename', '=', $rule ]) ;
 
 	 formatrule( $h->{definition} )  ;
+}
+sub tables_of_db_desc {
+         sprintf '%-32s  %-17s', 'Table', 'Age (Million)';
+}
+sub tables_of_db {
+	my ($o, $database ) = @_;
+	my $dh  = dbconnect ( $o, form_dsn($o,$database)  ) or return;
+        my $h   = $dh->{dbh}->selectall_arrayref( <<"");
+		select  nspname||'.'||relname, age( relfrozenxid )
+		from pg_class c
+			 join pg_namespace n on ( n.oid= c.relnamespace)
+		where relkind = 'r'
+			and nspname not like 'pg_%'
+			and nspname not like 'information_schema'
+		order by 2 desc
+
+        [ map { sprintf '%-40s  %5.3f', ${$_}[0], ${$_}[1]/1_000_000 } @$h ]
+;
+
+
 }
 1;
 __END__

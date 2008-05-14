@@ -3,7 +3,7 @@ my $b= Module::Build->new(
         module_name        => 'Pg::Pcurse',
         dist_version_from  => 'lib/Pg/Pcurse.pm',
         dist_author        => 'Ioannis Tambouras<ioannis@cpan.org>',
-        requires           => {  perl                 => '5.8',
+        requires           => {  perl                 => '5.008',
                                 #'FindBin'            => '1.47',
                                 #'Log::Log4perl'      => '1.06',
                                 #'Text::Autoformat'   => '0',

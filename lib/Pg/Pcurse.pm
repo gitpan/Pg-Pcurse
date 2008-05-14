@@ -17,7 +17,7 @@ use Pg::Pcurse::Query1;
 use Pg::Pcurse::Query2;
 use Pg::Pcurse::Query3;
 
-our $VERSION = '0.12';
+our $VERSION = '0.13';
 
 our $opt;
 
@@ -101,13 +101,18 @@ sub show_settings {
 	update_section_display ('Context', $choi);
         update_big_display( sub{''}, \& all_settings);
 }
+sub show_vacuum  { 
+        my $choi = all_databases_age($opt);
+	update_section_display ('Databases            Age (Million)', $choi);
+        ($::dbname) = first_word( $choi->[ $::section->getField('VALUE')]);
+        update_big_display( \&tables_of_db_desc, \&tables_of_db) ;
+}
 sub show_databases{ big_display_only( \& all_databases_desc,\& all_databases) } 
 sub show_buffers  { big_display_only( sub{''}, \& table_buffers )} 
 sub show_bucardo  { big_display_only( \& bucardo_conf_desc, \& bucardo_conf)} 
 sub show_users    { big_display_only( \&get_users_desc, \&get_users     )  }
 
 sub show_stats   { whole_movie( \&table_stats_desc, \&table_stats       )  }
-sub show_vacuum  { whole_movie( \&tables_vacuum_desc, \&tables_vacuum   )  }
 sub show_tables  { whole_movie( \&tables_brief_desc, \&tables_brief     )  }
 sub show_views   { whole_movie( \&get_views_all_desc, \&get_views_all   )  }
 sub show_procedu { whole_movie( \&get_proc_desc, \&get_proc             )  }

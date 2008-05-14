@@ -1,6 +1,7 @@
 # Copyright (C) 2008 Ioannis Tambouras <ioannis@cpan.org>. All rights reserved.
 # LICENSE:  GPLv3, eead licensing terms at  http://www.fsf.org .
 package Pg::Pcurse::Misc;
+use 5.008008;
 use Carp::Assert;
 use Getopt::Long;
 use base 'Exporter';

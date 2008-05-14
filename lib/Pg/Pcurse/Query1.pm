@@ -1,6 +1,7 @@
 # Copyright (C) 2008 Ioannis Tambouras <ioannis@cpan.org>. All rights reserved.
 # LICENSE:  GPLv3, eead licensing terms at  http://www.fsf.org .
 package Pg::Pcurse::Query1;
+use 5.008008;
 use DBIx::Abstract;
 use Carp::Assert;
 use base 'Exporter';
@@ -21,7 +22,7 @@ our @EXPORT = qw(
 	get_tables2_desc         tables_vacuum_desc   
 	bucardo_conf_desc 	 bucardo_conf
         pgbuffercache            buffercache_summary
-	get_nspacl               
+	get_nspacl               all_databases_age 
 
 	all_databases_desc       all_databases 
 	get_schemas              get_schemas2 
@@ -814,6 +815,15 @@ sub get_index {
           sprintf( '%-14s : %s', 'pred'       , $h->{indpred}       ),
         ]
 
+}
+sub all_databases_age {
+	my ($o) = @_;
+	my $dsn =  form_dsn ($o, '');
+	my $dh  = dbconnect( $o, $dsn  ) or return;
+        my $st  = $dh->select(  [qw( datname age(datfrozenxid))],
+                                'pg_database' );
+       [ sort map { sprintf '%-22s    %5.3f', ${$_}[0], ${$_}[1]/1_000_000  }
+		       @{ $st->fetchall_arrayref} ];
 }
       
 
