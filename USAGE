@@ -12,12 +12,12 @@ It is too simple:
 
 3. The results are displayed in the bottom window.
    Use arrows, vi keys, ENTER (or SPACE, or ' ' ) seals the selection.
-   Keep pressing 'd' to view more on results.
-   'A'  key attemps to analyze the table, or database
-   'V'  key attemps to vacume  the table, or database
-   In tables   mode, 'D' displays the youngest 20 rows of table 
-   In database mode, 'D' displays count of database objects
-   In settings mode, 'D' displays fsm data (contrib module pg_freespacemap.sql)
+   Keep pressing 'd' if you want more results.
+   Ctrl-H displays Help screen
+   Ctrl-F appends the contents of the bottom display to /tmp/pcurse.out
+   In tables mode Ctrl-L displays the last 20 updates in table
+   In tables and database mode Ctrl-A analyses at table or database
+   In tables and database mode Ctrl-V analyses at table or database
    TBB (or 'l') takes you back to the starting menu.
 
 4. Press 'q' to quit the program. Thank you for flying Pcurse!  

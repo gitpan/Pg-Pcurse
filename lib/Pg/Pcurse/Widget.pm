@@ -11,7 +11,7 @@ use Curses::Widgets::ButtonSet;
 use strict;
 use warnings;
 use Pg::Pcurse;
-our $VERSION = '0.12';
+our $VERSION = '0.14';
 
 
 use base 'Exporter';
@@ -191,15 +191,18 @@ sub jscan {
                         #my $k = $mwh->getch;
                         #if ($k eq 's') { $::mode = 'stats'; return '\t' };
                         #$key = $k; }
-                if($key eq 'd')  { got_h( $mwh )  }
-                if($key eq 'D')  { got_D( $mwh )  }
-                if($key eq 'A')  { analyze        }
-                if($key eq 'V')  { vacuum         }
-                if($key eq 'j')  { return KEY_DOWN}
-                if($key eq 'k')  { return KEY_UP  }
-                if($key eq 'h')  { return "\n"    }
-                if($key eq ' ')  { return "\n"    }
-                if($key eq 'q')  { exit 0         }
+                if($key eq 'd' )  { got_h( $mwh )       }
+                if($key eq '')  { got_L( $mwh )       }
+                if($key eq '')  { got_T( $mwh )       }
+                if($key eq '')  { got_H( $mwh )       }
+                if($key eq "")  { save2file( $mwh )   }
+                if($key eq '')  { analyze             }
+                if($key eq '')  { vacuum              }
+                if($key eq 'j' )  { return KEY_DOWN     }
+                if($key eq 'k' )  { return KEY_UP       }
+                if($key eq 'h' )  { return "\n"         }
+                if($key eq ' ' )  { return "\n"         }
+                if($key eq 'q' )  { exit 0              }
         }
         return $key;
 }
@@ -285,6 +288,13 @@ sub init_mini_root {
 	$win_secret = create_mini_root ( 20,81,4,0);
 }
 
+sub got_h {
+        my $mwh = shift;
+        my $lb_secret  = listbox5 (18,78,0,0, \&retrieve_context)  or return;
+        $lb_secret->draw($win_secret,0);
+        $lb_secret->execute($win_secret);
+}
+
 sub got_d {
         my $mwh = shift;
         my $ll_secret = label_sec( 4,29,0,0) or return;
@@ -293,15 +303,27 @@ sub got_d {
         $ll_secret->execute($sroot);
         sleep 1;
 }
-sub got_h {
+sub got_H {
         my $mwh = shift;
-        my $lb_secret  = listbox5 (18,78,0,0, \&retrieve_context)  or return;
+        my $ll_secret = label_help( 5,40,0,0) or return;
+        $sroot->box(0,0);
+        $ll_secret->draw($sroot);
+        $ll_secret->execute($sroot);
+        sleep 4;
+}
+sub got_L {
+        my $mwh = shift;
+        my $lb_secret  = listbox5_white(18,78,0,0,\&capital_context) or return;
         $lb_secret->draw($win_secret,0);
         $lb_secret->execute($win_secret);
 }
-sub got_D {
+sub got_T {
+        return  unless $::mode =~ /^ (tables|databases) $/xo;
         my $mwh = shift;
-        my $lb_secret  = listbox5_c2 (18,78,0,0, \&capital_context)  or return;
+        my $fun = {  tables     => \& stat_of ,
+                     databases  => \& over3 ,
+                  }->{$::mode||return};
+        my $lb_secret  = listbox5_c2 (18,78,0,0, $fun )  or return;
         $lb_secret->draw($win_secret,0);
         $lb_secret->execute($win_secret);
 }
@@ -360,6 +382,26 @@ sub listbox5_c2 {
                   VALUE       =>  0,
           };
 }
+sub listbox5_white {
+        my ( $lines, $cols, $y,$x, $fun) = @_;
+	my $content = $fun->() or return;
+        new Curses::Widgets::ListBox {
+                  Y           => $x||1,
+                  X           => $y||3,
+                  COLUMNS     => $cols||25,
+                  LISTITEMS   => $content,
+                  MULTISEL    => 0,
+                  LINES       => $lines||5,
+                  INPUTFUNC   => \&miniscan_5c,
+                  SELECTEDCOL => 'black',
+                  CAPTIONCOL  => 'yellow',
+                  FOCUSSWITCH =>  "\tdDl\n",
+                  BORDER      => 0,
+                  FOREGROUND  => 'blue',
+                  BACKGROUND  => 'white',
+                  VALUE       =>  0,
+          };
+}
 
 sub label_sec {
         my ( $lines, $cols, $y,$x) = @_;
@@ -410,5 +452,24 @@ sub create_button {
         }
 }
 
-
+sub label_help {
+        my ( $lines, $cols, $y,$x) = @_;
+	my $content = q(
+Ctrl-L   Display 20 lastest tuples
+Ctrl-T   Statistics
+Ctrl-A   Analyze
+Ctrl-F   data to File /tmp/pcurse.out 
+        );
+        new  Curses::Widgets::Label {
+		   COLUMNS     =>  $cols,
+		   LINES       =>  $lines,
+		   VALUE       =>  $content,
+		   FOREGROUND  =>  'black',
+		   BACKGROUND  =>  'green',
+		   X           =>  $x,
+		   Y           =>  $y,
+		   ALIGNMENT   => 'L',
+        };
+}
 1;
+

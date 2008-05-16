@@ -8,14 +8,14 @@ use base 'Exporter';
 use Data::Dumper;
 use strict;
 use warnings;
-our $VERSION = '0.12';
+our $VERSION = '0.14';
 use Pg::Pcurse::Misc;
 use Pg::Pcurse::Query0;
 
 our @EXPORT = qw( 
-	tables_vacuum  all_settings   
+	tables_vacuum  
         get_proc_desc  get_proc        tables_vacuum2
-        get_setting    table_buffers   over_dbs
+        table_buffers   over_dbs       over_dbs3
         analyze_tbl    analyze_db      vacuum_per_table
 	vacuum_tbl     vacuum_db       fsm_settings
 	reindex_tbl    reindex_db      table_stat
@@ -208,7 +208,13 @@ sub tables_vacuum2 {
 		       @{$h} ];
 }
 sub table_stats_desc {
-     sprintf '%-20s%15s%15s%13s','NAME','seq-scan','idx_scan', 'ndead_tup', 
+     sprintf '%-23s%15s%15s%13s%11s','NAME','seq-scan','idx_scan', '% seq/idx', 'ndead_tup', 
+}
+
+sub format_rat {
+	my ($seq, $idx) = @_ ;
+	return 'inf' unless $idx;
+	sprintf '%5.1f', $seq/$idx ;
 }
 sub table_stats {
 	my ($o, $database , $schema) = @_;
@@ -222,7 +228,8 @@ sub table_stats {
         for my $i (@$h) { 
               $_ || ($_= 0 )   for @$i; 
         }
-        [ sort map { sprintf '%-20s%15s%15s%13s', @{$_}[0..3] } 
+        [ sort map { sprintf '%-23s%15s%15s%13s%9s', @{$_}[0..2],
+                              format_rat( @{$_}[1..2]), ${$_}[3] }
 	      @{ $h } ];
 
 }
@@ -247,31 +254,6 @@ sub table_stats2 {
 	      @{ $h } ];
 
 }
-
-sub get_setting {
-	my ($o,$name) = @_;
-	return unless $name;
-	my $dh = dbconnect ( $o, form_dsn($o,'') ) or return;
-	my $h  = $dh->select_one_to_hashref(
-                        [qw( name category context min_val max_val
-			     short_desc extra_desc vartype unit setting 
-                        )], 'pg_settings', 
-                        ['name', '=', $dh->quote($name) ])  or return;
-        [ sprintf( '%-s', $h->{name}), '',
-          sprintf( '%-9s : %s', 'vartype' , $h->{vartype} || ''),
-          sprintf( '%-9s : %s', 'min_val' , $h->{min_val} || ''),
-          sprintf( '%-9s : %s', 'max_val' , $h->{max_val} || ''),
-          sprintf( '%-9s : %s', 'setting' , $h->{setting} || ''),
-          sprintf( '%-9s : %s', 'units'   , $h->{units}   || ''),
-          sprintf( '%-9s : %s', 'context' , $h->{context} || ''),
-          sprintf( '%-9s : %s', 'sourse'  , $h->{sourse}  || ''),
-	  sprintf( '%-9s : %s', 'category', $h->{category}|| ''), 
-	  '',
-	  Curses::Widgets::textwrap($h->{short_desc},75),
-	  '',
-	  Curses::Widgets::textwrap($h->{extra_desc},75),
-        ] 
-} 
 
 
 sub get_nspacl {
@@ -475,10 +457,7 @@ sub over_dbs {
 				'pg_encoding_to_char(encoding) as encoding',
 			         qw( datistemplate  datallowconn  datconnlimit 
 			             datlastsysoid  datfrozenxid  dattablespace
-                                     datconfig      datacl        blks_read
-                                     blks_hit       xact_commit   xact_rollback
-				     tup_returned   tup_fetched   tup_inserted
-				     tup_updated    tup_deleted   oid
+                                     datconfig      datacl    
                                  ), 'age(datfrozenxid)',
 	      'pg_size_pretty( pg_database_size(pg_database.datname)) as size',
                                 ],
@@ -501,19 +480,10 @@ sub over_dbs {
           sprintf( '%-18s : %s', 'config'        , $h->{datconfig}
                                                    &&"@{$h->{datconfig}}" ),
           sprintf( '%-18s : %s', 'acl', $h->{datacl} && "@{$h->{datacl}}" ),
-          sprintf( '%-18s : %s', 'blks_read'     , $h->{blks_read}        ),
-          sprintf( '%-18s : %s', 'blks_hit'      , $h->{blks_hit}         ),
-          sprintf( '%-18s : %s', '% read/hit'      , 
-                   calc_read_ratio( @{$h}{'blks_read','blks_hit'} )),
           sprintf( '%-18s : %s', 'xact_commit'   , $h->{xact_commit}    ),
           sprintf( '%-18s : %s', 'xact_rollback' , $h->{xact_rollback}  ),
           sprintf( '%-18s : %s', 'pg_size'       , $h->{size}           ),
           sprintf( '%-18s : %s', 'tablespace'    , $h->{dattablespace}  ),
-          sprintf( '%-18s : %s', 'tup_returned'  , $h->{tup_returned}   ),
-          sprintf( '%-18s : %s', 'tup_fetched'   , $h->{tup_fetched}    ),
-          sprintf( '%-18s : %s', 'tup_inserted'  , $h->{tup_inserted}   ),
-          sprintf( '%-18s : %s', 'tup_updated'   , $h->{tup_updated}    ),
-          sprintf( '%-18s : %s', 'tup_deleted'   , $h->{tup_deleted}    ),
         ]
 }
 sub calc_read_ratio {
@@ -588,9 +558,9 @@ sub table_stat {
         [
 	  sprintf( '%-14s : %s', 'n_dead_tup'      ,  $h->{n_dead_tup}      ),
 	  sprintf( '%-14s : %s', 'last_analyze'    ,  $h->{last_analyze}    ),
-	  sprintf( '%-14s: %s', 'last_autoanalyze',  $h->{last_autoanalyze}),
-	  sprintf( '%-14s : %s', 'last_vacuum'     ,  $h->{vacuum}          ),
-	  sprintf( '%-14s: %s', 'last_autovacuum' ,  $h->{autovacuum}      ),
+	  sprintf( '%-14s: %s', 'last_autoanalyze',  $h->{last_autoanalyze} ),
+	  sprintf( '%-14s : %s', 'last_vacuum'     ,  $h->{last_vacuum}     ),
+	  sprintf( '%-14s: %s', 'last_autovacuum' ,  $h->{last_autovacuum}  ),
         ];
 
 	[@$r1,@$r2]
@@ -733,20 +703,6 @@ and usagecount>1) as "usage>1"',
 	]
 
 }
-sub all_settings {
-	my ($o,undef,undef, $context)= @_;
-	my $dh = dbconnect ( $o, form_dsn($o,'') ) or return;
-	my $st;
-	if ($context =~ /^all/xoi ) {
-		$st = $dh->select([qw(name setting unit)], 'pg_settings');
-        }else{
-		$st = $dh->select([qw(name setting unit)], 
-                             'pg_settings', ['context', 'ilike', 
-                                    $dh->quote($context)])  or return;
-	}
-	[ map { sprintf '%-34s%19s%10s', $_->[0], $_->[1]||'', $_->[2]||'' }
-          @{$st->fetchall_arrayref} ];
-} 
 sub index2_desc_ {
      sprintf '%-30s%-10s%-10s %-10s %-10s','NAME', 'relname',
                     'idx_scan', 'idx_tup_read','idx_tup_fetch'
@@ -826,5 +782,45 @@ sub all_databases_age {
 		       @{ $st->fetchall_arrayref} ];
 }
       
+sub over_dbs3 {
+	my ($o, $database )= @_;
+	my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+        my $h  = $dh->select_one_to_hashref( {
+                      fields=> ['pg_database.datname',
+			        'pg_get_userbyid(datdba) as dba',
+				'pg_encoding_to_char(encoding) as encoding',
+			         qw( datistemplate  datallowconn  datconnlimit 
+			             datlastsysoid  datfrozenxid  dattablespace
+                                     datconfig      datacl        blks_read
+                                     blks_hit       xact_commit   xact_rollback
+				     tup_returned   tup_fetched   tup_inserted
+				     tup_updated    tup_deleted   oid
+                                 ), 'age(datfrozenxid)',
+	      'pg_size_pretty( pg_database_size(pg_database.datname)) as size',
+                                ],
+                      table => 'pg_database,pg_stat_database',
+		      join  => 'pg_database.datname=pg_stat_database.datname',
+		      where => ['pg_database.datname', 
+                                '=', $dh->quote($database)] 
+                       });
+
+        [ sprintf( '%-18s : %s', 'database'      , $h->{datname}        ),
+          sprintf( '%-18s : %s', 'oid'           , $h->{oid}            ),
+
+          sprintf( '%-18s : %s', 'blks_read'     , $h->{blks_read}        ),
+          sprintf( '%-18s : %s', 'blks_hit'      , $h->{blks_hit}         ),
+          sprintf( '%-18s : %s', '% read/hit'      , 
+                   calc_read_ratio( @{$h}{'blks_read','blks_hit'} )),
+          sprintf( '%-18s : %s', 'xact_commit'   , $h->{xact_commit}    ),
+          sprintf( '%-18s : %s', 'xact_rollback' , $h->{xact_rollback}  ),
+          sprintf( '%-18s : %s', 'pg_size'       , $h->{size}           ),
+          sprintf( '%-18s : %s', 'tablespace'    , $h->{dattablespace}  ),
+          sprintf( '%-18s : %s', 'tup_returned'  , $h->{tup_returned}   ),
+          sprintf( '%-18s : %s', 'tup_fetched'   , $h->{tup_fetched}    ),
+          sprintf( '%-18s : %s', 'tup_inserted'  , $h->{tup_inserted}   ),
+          sprintf( '%-18s : %s', 'tup_updated'   , $h->{tup_updated}    ),
+          sprintf( '%-18s : %s', 'tup_deleted'   , $h->{tup_deleted}    ),
+        ]
+}
 
 1;

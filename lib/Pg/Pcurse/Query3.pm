@@ -8,10 +8,12 @@ use base 'Exporter';
 use Data::Dumper;
 use strict;
 use warnings;
-our $VERSION = '0.12';
+our $VERSION = '0.14';
 use Pg::Pcurse::Misc;
 use Pg::Pcurse::Query0;
+use Pg::Pcurse::Defaults;
 
+#*pg_default = *Pg::Pcurse::Defaults::pg_default;
 
 our @EXPORT = qw( 
 	bucardo_conf_of  user_of
@@ -19,6 +21,7 @@ our @EXPORT = qw(
         rule_of		 tbl_data_of              
 	trg_of           tables_of_db      tables_of_db_desc
         statsoftable_desc        statsoftable 
+	all_settings     get_setting
 );
 
 sub statsoftable_desc {
@@ -286,7 +289,84 @@ sub tables_of_db {
         [ map { sprintf '%-40s  %5.3f', ${$_}[0], ${$_}[1]/1_000_000 } @$h ]
 ;
 
-
 }
+sub are_equal {
+	my ($actual, $default) = @_;
+	return 1  if ($actual eq'60s' and $default eq '1min');
+	return 1  if ($actual eq'1024kB' and $default eq '1MB');
+	return 1  if ($actual eq'2048kB' and $default eq '2MB');
+	return 1  if ($actual eq'16384kB' and $default eq '16MB');
+	return 1  if ($actual eq'10240kB' and $default eq '10MB');
+	return 1  if ($actual eq'300s' and $default eq '5min');
+	return 1  if ($actual eq'1000ms' and $default eq '1s');
+	return 1  if ($actual eq'1440min' and $default eq '1d');
+	return 1  if ($actual eq'88kB' and $default eq '64kB');
+	return 1  if ($actual eq'-1kB' and $default eq '-1');
+	return 1  if ($actual eq'-1ms' and $default eq '-1');
+	return 1  if ($actual eq'10248kB' and $default eq '8MB');
+	return 1  if ($actual eq'163848kB' and $default eq '128MB');
+	return;
+}
+
+sub all_settings {
+	my ($o,undef,undef, $context)= @_;
+	my $dh = dbconnect ( $o, form_dsn($o,'') ) or return;
+	my $st;
+	if ($context =~ /^all/xoi ) {
+		$st = $dh->select([qw(name setting unit)], 'pg_settings');
+	}elsif ($context =~ /^changed/xoi) {
+		$st = $dh->select([qw(name setting unit)], 'pg_settings');
+        }else{
+		$st = $dh->select([qw(name setting unit)], 
+                             'pg_settings', ['context', 'ilike', 
+                                    $dh->quote($context)])  or return;
+	}
+	if ($context !~ /^changed/xoi ) {
+	   [ map { sprintf '%-34s%19s%10s',$_->[0], $_->[1]||'',$_->[2]||''}
+             @{$st->fetchall_arrayref} ];
+	}else{
+		my @res ;
+		for ( @{$st->fetchall_arrayref}) {
+			my ( $name,$val,$unit) = ($_->[0], 
+                                                 $_->[1]||'', $_->[2]||'') ;
+	                my $default=$Pg::Pcurse::Defaults::pg_default->{$name};
+			next  unless $default;
+			next  if  ($val.$unit) eq $default;
+			next  if  are_equal($val.$unit, $default);
+		       push @res, 
+		       sprintf '%-34s%19s%10s',$name, $val,$unit,
+		
+		}
+		return  [ @res ] ;
+	}
+} 
+sub get_setting {
+	my ($o,$name) = @_;
+	return unless $name;
+	my $dh = dbconnect ( $o, form_dsn($o,'') ) or return;
+	my $h  = $dh->select_one_to_hashref(
+                        [qw( name category context min_val max_val
+			     short_desc extra_desc vartype unit setting 
+                        )], 'pg_settings', 
+                        ['name', '=', $dh->quote($name) ])  or return;
+        [ sprintf( '%-s', $h->{name}), '',
+          sprintf( '%-9s : %s', 'setting' , $h->{setting} || ''),
+          sprintf( '%-9s : %s', 'default' , 
+                   $Pg::Pcurse::Defaults::pg_default->{ $h->{name}} ),
+          sprintf( '%-9s : %s', 'vartype' , $h->{vartype} || ''),
+          sprintf( '%-9s : %s', 'min_val' , $h->{min_val} || ''),
+          sprintf( '%-9s : %s', 'max_val' , $h->{max_val} || ''),
+          sprintf( '%-9s : %s', 'units'   , $h->{units}   || ''),
+          sprintf( '%-9s : %s', 'context' , $h->{context} || ''),
+          sprintf( '%-9s : %s', 'sourse'  , $h->{sourse}  || ''),
+	  sprintf( '%-9s : %s', 'category', $h->{category}|| ''), 
+	  '',
+	  Curses::Widgets::textwrap($h->{short_desc},75),
+	  '',
+	  Curses::Widgets::textwrap($h->{extra_desc},75),
+        ] 
+} 
+
+
 1;
 __END__

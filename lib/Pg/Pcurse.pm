@@ -17,7 +17,7 @@ use Pg::Pcurse::Query1;
 use Pg::Pcurse::Query2;
 use Pg::Pcurse::Query3;
 
-our $VERSION = '0.13';
+our $VERSION = '0.14';
 
 our $opt;
 
@@ -26,7 +26,8 @@ use base 'Exporter';
 our @EXPORT = qw( 
 	execute_mode       retrieve_context   capital_context
 	$opt               retrieve_permit    update_big_display
-	analyze            reindex            vacuum   
+	analyze            reindex            vacuum   save2file
+	stat_of            over3
 );
 
 *secondary_listbox = *main::secondary_listbox;
@@ -66,12 +67,6 @@ sub update_schema_display {
         ($::sname) = first_word( $::she->[ $::schemas->getField('VALUE')] );
 }
 
-sub disable_schema_display {
-	return unless $::schemas;
-	my $misc = misc_system_wide($opt);
-	$::schemas->setField( LISTITEMS =>$misc, CAPTION=>'' );
-	$::schemas->draw($::mwh);
-}
 sub update_big_display {
         # Result Table ( like relevant tables, indexes, objects, etc,. )
        ($::desc, $::actual) = @_ ;
@@ -79,6 +74,12 @@ sub update_big_display {
         $::tab     = $::actual->( $opt, $::dbname, $::sname, $::secname);
         $::big     = big_listbox( $::desc, $::tab, 11, 0);
         $::big->execute($::mwh,0);
+}
+sub disable_schema_display {
+	return unless $::schemas;
+	my $misc = misc_system_wide($opt);
+	$::schemas->setField( LISTITEMS =>$misc, CAPTION=>'' );
+	$::schemas->draw($::mwh);
 }
 sub big_display_only { 
 	disable_schema_display ; 
@@ -91,20 +92,22 @@ sub whole_movie {
 }
 sub update_section_display {
 	my ($title, $choices) = @_ ;
-        $::section  = secondary_listbox( $title, $choices, 2,37);
-        $::section->execute($::mwh,0);
-        ($::secname) = first_word( $choices->[ $::section->getField('VALUE')]);
+	$::she = $choices;
+        $::schemas  = secondary_listbox( $title, $::she, 2,37);
+        $::schemas->execute($::mwh,0);
+        ($::secname) = first_word( $::she->[ $::schemas->getField('VALUE')]);
 }
 
 sub show_settings { 
-        my $choi = [qw( All backend internal postmaster sighup superuser user)];
+        my $choi = [qw( All backend internal postmaster 
+                        sighup superuser user changed)];
 	update_section_display ('Context', $choi);
         update_big_display( sub{''}, \& all_settings);
 }
 sub show_vacuum  { 
         my $choi = all_databases_age($opt);
 	update_section_display ('Databases            Age (Million)', $choi);
-        ($::dbname) = first_word( $choi->[ $::section->getField('VALUE')]);
+        ($::dbname) = first_word( $choi->[ $::schemas->getField('VALUE')]);
         update_big_display( \&tables_of_db_desc, \&tables_of_db) ;
 }
 sub show_databases{ big_display_only( \& all_databases_desc,\& all_databases) } 
@@ -151,7 +154,6 @@ sub retrieve_context {
 
 ### The following functions are colled from the above dispatcher
 sub stats2 { [table_stats2_desc,  @{table_stats2($opt, $::dbname, $::sname )}]}
-sub vacuum2{ [@{tables_vacuum2( $opt, $::dbname)  }]}
 sub bufferca{ 
 	[ @{buffercache_summary( $opt, $::dbname)} ,
 	  '','',
@@ -166,7 +168,8 @@ sub bufferca{
 sub vacuumof {
         my $index = $::big->getField('VALUE');
         my ($f)   = first_word( $::tab->[$index] );
-        vacuum_per_table( $opt, $::dbname, $::sname, $f ) or return [];
+        #vacuum_per_table( $opt, $::dbname, $::sname, $f ) or return [];
+        vacuum_per_table( $opt, $::dbname, split(/\./, $f,2) ) or return [];
 }
 sub userof {
         my $index = $::big->getField('VALUE');
@@ -228,6 +231,11 @@ sub settingof {
 }
 
 sub last_word { local $_ = shift; my ($last) =  / \w+$/xg; $last; }
+sub over3  { 
+        my $index = $::big->getField('VALUE');
+        my ($f)   = first_word( $::tab->[$index] );
+        over_dbs3( $opt, $f) ;
+} 
 
 sub procof {
         my $index = $::big->getField('VALUE')   ; 
@@ -256,7 +264,11 @@ sub capital_context {
          }->{$::mode||return})->(@_) ;
 }
 
-	    
+sub stat_of {
+        my $index = $::big->getField('VALUE');
+        my ($f) = first_word( $::tab->[$index] );
+        statsoftable( $opt, $::dbname, $::sname, $f ) or return [];
+}
 sub tdataof {
         my $index = $::big->getField('VALUE');
         my ($f) = first_word( $::tab->[$index] );
@@ -361,8 +373,13 @@ sub do_vacuum_db {
         my ($f) = first_word( $::tab->[$index] );
         vacuum_db( $opt, $::dbname ) or return ;
 }
-
-
+sub save2file {
+	eval { open my ($i) , '>>/tmp/pcurse.out';
+	       print {$i} $::desc                ;
+	       print {$i} $_  for @{$::tab}      ; 1;
+	} or return;
+        display_keyword 'SAVED ' ;
+}
 
 sub  display_button {
 	my ($choices) = @_ ;

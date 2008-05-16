@@ -1,5 +1,20 @@
 Revision history for Perl extension Pg::Pcurse.
 
+0.14  Thu May 15 20:37:08 2008
+        - minor display fixes
+        - Ctrl-H displays Help screen
+        - Ctrl-F appends the contents of the bottom display to /tmp/pcurse.out
+        - Ctrl-L replaces Shift-d , it displays the last 20 updates in table
+        - Ctrl-A replaces Shift-a , it analyses  a table or database
+        - Ctrl-V replaces Shift-v , it vacuums   a table or database
+        - Ctrl-R replaces Shift-r , it reindexes a table or database
+        - vacuum, and auto_vacuum dates are properly displayed
+
+0.13  Wed May 14 10:28:45 2008
+        - fixed use 5.008 in Makefile.PL
+	- Mode databases still works, but under development
+
+
 0.12  Mon May 12 06:52:36 2008
         - schema table is disable for user mode
         - added extra_desc for settings mode
