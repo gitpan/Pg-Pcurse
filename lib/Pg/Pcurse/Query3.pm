@@ -364,6 +364,8 @@ sub get_setting {
 	  Curses::Widgets::textwrap($h->{short_desc},75),
 	  '',
 	  Curses::Widgets::textwrap($h->{extra_desc},75),
+	  ($h->{name} eq 'log_line_prefix') && 
+		sprintf 'REMEMBER: pgfouine expects   %s', '%t [%p]: [%l-1]'
         ] 
 } 
 

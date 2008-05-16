@@ -1,5 +1,9 @@
 Revision history for Perl extension Pg::Pcurse.
 
+0.15  Thu May 15 23:48:15 2008
+        - added format info about pgfouine's log_line_prefix
+        - Added the missing Defaults.pm file
+
 0.14  Thu May 15 20:37:08 2008
         - minor display fixes
         - Ctrl-H displays Help screen
@@ -9,6 +13,8 @@ Revision history for Perl extension Pg::Pcurse.
         - Ctrl-V replaces Shift-v , it vacuums   a table or database
         - Ctrl-R replaces Shift-r , it reindexes a table or database
         - vacuum, and auto_vacuum dates are properly displayed
+        - In settings mode, added 'changed' that selects only the parameters
+          set differently than the default postgresql.conf (mine is from Debian)
 
 0.13  Wed May 14 10:28:45 2008
         - fixed use 5.008 in Makefile.PL

@@ -7,6 +7,7 @@ lib/Pg/Pcurse/Query1.pm
 lib/Pg/Pcurse/Query2.pm
 lib/Pg/Pcurse/Query3.pm
 lib/Pg/Pcurse/Widget.pm
+lib/Pg/Pcurse/Defaults.pm
 LICENSE
 Makefile.PL
 MANIFEST
