@@ -17,7 +17,7 @@ use Pg::Pcurse::Query1;
 use Pg::Pcurse::Query2;
 use Pg::Pcurse::Query3;
 
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 
 our $opt;
 
@@ -27,7 +27,7 @@ our @EXPORT = qw(
 	execute_mode       retrieve_context   capital_context
 	$opt               retrieve_permit    update_big_display
 	analyze            reindex            vacuum   save2file
-	stat_of            over3
+	stat_of            over3              bufcalc
 );
 
 *secondary_listbox = *main::secondary_listbox;
@@ -51,6 +51,7 @@ sub execute_mode {
             rules      =>  \& show_rules       ,
             settings   =>  \& show_settings    ,
             bucardo    =>  \& show_bucardo     ,
+            dict       =>  \& show_dict        ,
             triggers   =>  \& show_triggers    ,
             users      =>  \& show_users       ,
          } -> {$mode})->();
@@ -116,6 +117,7 @@ sub show_bucardo  { big_display_only( \& bucardo_conf_desc, \& bucardo_conf)}
 sub show_users    { big_display_only( \&get_users_desc, \&get_users     )  }
 
 sub show_stats   { whole_movie( \&table_stats_desc, \&table_stats       )  }
+sub show_dict    { whole_movie( \&dict_desc, \&dict                     )  }
 sub show_tables  { whole_movie( \&tables_brief_desc, \&tables_brief     )  }
 sub show_views   { whole_movie( \&get_views_all_desc, \&get_views_all   )  }
 sub show_procedu { whole_movie( \&get_proc_desc, \&get_proc             )  }
@@ -257,13 +259,18 @@ sub tstat {
 ##########################################################################
 ## Another dispatcher
 sub capital_context {
-	return  unless $::mode =~ /^ (tables|settings|databases) $/xo;
+	return  unless $::mode =~ /^ (stats|buffers|tables|settings|databases) 
+                                     $/xo;
         ({  tables     => \& tdataof ,
-            settings   => \& fsmvals ,
+            stats      => \& tdataof ,
             databases  => \& dbof    ,
+            buffers    => \& bufcalc ,
          }->{$::mode||return})->(@_) ;
 }
 
+sub bufcalc {
+        bufstat( $opt, $::dbname, $::sname,  ) or return [];
+}
 sub stat_of {
         my $index = $::big->getField('VALUE');
         my ($f) = first_word( $::tab->[$index] );
@@ -275,16 +282,20 @@ sub tdataof {
         tbl_data_of( $opt, $::dbname, $::sname, $f ) or return [];
 }
 sub dbof {
-        my $index = $::big->getField('VALUE');
-        my ($f) = first_word( $::tab->[$index] );
+        my $index  = $::big->getField('VALUE');
+        my ($f)    = first_word( $::tab->[$index] );
         my $title  = object_totals_desc;
+        my @desc   = object_totals_desc_long;
         my $r1     = object_totals( $opt, $f, 'all'     );
         my $r2     = object_totals( $opt, $f, 'shared'  );
         my $r3     = object_totals( $opt, $f, 'noshared');
+        my $r4     = object_totals( $opt, $f, 'noshared-nosystem');
 	[ $f, '', $title, '' , 
           "@$r1" . "\t\t totals", 
           "@$r2" . "\t\t shared", 
           "@$r3" . "\t\t not shared", 
+          "@$r4" . "\t\t not shared, non-system", 
+          @desc,
         ];
 }
 sub fsmvals {
@@ -317,9 +328,9 @@ sub update_bigbox_inc {
 }
 sub analyze  {
         return unless $::mode =~ qr/^ (tables|stats|databases|vacuum) $/xo;
-        ({ tables    => \&do_analyze_tbl,
-           stats     => \&do_analyze_tbl,
-           databases => \&do_analyze_db,
+        ({ tables    => \& do_analyze_tbl,
+           stats     => \& do_analyze_tbl,
+           databases => \& do_analyze_db,
         } -> {$::mode})->() ? display_keyword 'ANALYZE'
                             : display_keyword 'failed';
 	update_bigbox_inc ;
@@ -337,20 +348,13 @@ sub vacuum  {
 
 sub reindex  {
 	return unless $::mode eq 'indexes';
-        ({  tables     => \& do_reindex_tbl ,
-            databases  => \& do_reindex_db  ,
-        }->{$::mode||return})->(@_) ? display_keyword 'REINDEX' 
-                                    : display_keyword 'failed' ;
-}
-sub do_reindex_tbl {
         my $index = $::big->getField('VALUE');
         my ($f) = first_word( $::tab->[$index] );
-        reindex_tbl( $opt, $::dbname, $::sname, $f ) or return ;
-}
-sub do_reindex_db {
-        my $index = $::big->getField('VALUE');
-        my ($f) = first_word( $::tab->[$index] );
-        reindex_db( $opt, $::dbname ) or return ;
+	my $ret = ($::mode eq 'tables') 
+		?  reindex_tbl( $opt, $::dbname, $::sname, $f )
+		:  reindex_db( $opt, $::dbname ) ;
+        ($ret)  ? display_keyword 'REINDEX' 
+                : display_keyword 'failed' ;
 }
 
 sub do_analyze_tbl {

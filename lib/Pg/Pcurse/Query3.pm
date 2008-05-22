@@ -22,6 +22,7 @@ our @EXPORT = qw(
 	trg_of           tables_of_db      tables_of_db_desc
         statsoftable_desc        statsoftable 
 	all_settings     get_setting
+	dict_desc        dict
 );
 
 sub statsoftable_desc {
@@ -43,20 +44,22 @@ sub statsoftable {
                               [     'schemaname', '=', $dh->quote($schema),
                                 'and', 'relname', '=', $dh->quote($table)]);
 
-	[ sprintf( '%-18s : %s', 'relname' ,      $h->{relname}      ),
-	  sprintf( '%-18s : %s', 'seq_scan',      $h->{seq_scan}     ),
-	  sprintf( '%-18s : %s', 'seq_tup_read',  $h->{seq_tup_read} ),
-	  sprintf( '%-18s : %s', 'idx_scan',      $h->{idx_scan}     ),
-	  sprintf( '%-18s : %s', 'idx_tup_fetch', $h->{idx_tup_fetch}),
-	  sprintf( '%-18s : %s', 'n_tup_ins',     $h->{n_tup_ins}    ),
-	  sprintf( '%-18s : %s', 'n_tup_upd',     $h->{n_tup_upd}    ),
-	  sprintf( '%-18s : %s', 'n_tup_del',     $h->{n_tup_del}    ),
-	  sprintf( '%-18s : %s', 'n_tup_hot_upd', $h->{n_tup_hot_upd}),
-	  sprintf( '%-18s : %s', 'n_live_tup',    $h->{n_live_tup}   ),
-	  sprintf( '%-18s : %s', 'n_dead_tup',    $h->{n_dead_tup}   ),
-	  sprintf( '%-18s : %s', 'last_vacuum',   $h->{last_vacuum}       ),
-	  sprintf( '%-18s : %s', 'last_autovacuum',$h->{last_autovacuum}  ),
-	  sprintf( '%-18s : %s', 'last_analyze',   $h->{last_analyze}     ),
+	[ sprintf( '%-18s : %s', 'relname' ,       $h->{relname}      ),
+	  sprintf( '%-18s : %s', 'seq_scan',       $h->{seq_scan}     ),
+	  sprintf( '%-18s : %s', 'idx_scan',       $h->{idx_scan}     ),
+	  sprintf( '%-18s : %s', '% read/idx', 
+	            calc_read_ratio( $h->{seq_scan},$h->{idx_scan})    ),
+	  sprintf( '%-18s : %s', 'n_live_tup',      $h->{n_live_tup}   ),
+	  sprintf( '%-18s : %s', 'n_dead_tup',      $h->{n_dead_tup}   ),
+	  sprintf( '%-18s : %s', 'seq_tup_read',   $h->{seq_tup_read} ),
+	  sprintf( '%-18s : %s', 'idx_tup_fetch',  $h->{idx_tup_fetch}),
+	  sprintf( '%-18s : %s', 'n_tup_ins',       $h->{n_tup_ins}    ),
+	  sprintf( '%-18s : %s', 'n_tup_upd',       $h->{n_tup_upd}    ),
+	  sprintf( '%-18s : %s', 'n_tup_del',       $h->{n_tup_del}    ),
+	  sprintf( '%-18s : %s', 'n_tup_hot_upd',   $h->{n_tup_hot_upd}),
+	  sprintf( '%-18s : %s', 'last_vacuum',     $h->{last_vacuum}  ),
+	  sprintf( '%-18s : %s', 'last_autovacuum' ,$h->{last_autovacuum}),
+	  sprintf( '%-18s : %s', 'last_analyze',    $h->{last_analyze}  ),
 	  sprintf( '%-18s : %s', 'last_autoanalyze',$h->{last_autoanalyze}),
         ];
 }
@@ -368,7 +371,25 @@ sub get_setting {
 		sprintf 'REMEMBER: pgfouine expects   %s', '%t [%p]: [%l-1]'
         ] 
 } 
+sub dict_desc {
+	 sprintf'%-20s %-10s         %-10s', 'Dict', 'Owner', 'template';
+}
+sub dict {
+        my ($o, $database, $schema, $table )= @_;
+        my $dh  = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+        $schema = $dh->quote( $schema );
+        my $h   = $dh->{dbh}->selectall_arrayref( <<"" );
+	 	select dictname,  pg_get_userbyid( dictowner), tmplname
+		from      pg_ts_dict     d
+	             join pg_namespace   n  on (dictnamespace=n.oid)
+	             join pg_ts_template t  on (d.dicttemplate=t.oid)
+	        where nspname = $schema
 
+	[ map { sprintf('%-20s %-10s         %-10s', @{$_}[0..2] )} 
+	     @$h
+        ]
+
+}
 
 1;
 __END__

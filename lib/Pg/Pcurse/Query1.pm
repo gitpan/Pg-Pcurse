@@ -22,7 +22,7 @@ our @EXPORT = qw(
 	get_tables2_desc         tables_vacuum_desc   
 	bucardo_conf_desc 	 bucardo_conf
         pgbuffercache            buffercache_summary
-	get_nspacl               all_databases_age 
+	get_nspacl               all_databases_age       bufstat
 
 	all_databases_desc       all_databases 
 	get_schemas              get_schemas2 
@@ -192,6 +192,26 @@ sub table_buffers {
 
 	[ map { sprintf '%-25s%10s', @{$_}[0..1]}
 		       @{$h} ];
+}
+sub bufstat { 
+	my ($o)= @_;
+	my $dh = dbconnect ( $o, form_dsn($o, '')  ) or return;
+        my $h  = $dh->select_one_to_hashref( [qw( buffers_checkpoint 
+	                                     checkpoints_req checkpoints_timed
+	                                     buffers_alloc   buffers_backend
+                                             )], 
+                                             'pg_stat_bgwriter');
+	my $total_chk     = $h->{checkpoints_req}+ $h->{checkpoints_timed};
+	my $forced_ratio  = calc_read_ratio( $h->{buffers_backend},
+                                             $h->{buffers_alloc} );
+	my $pages_per_chk = $h->{buffers_checkpoint} / $total_chk;
+	[ '',
+          sprintf('%-20s:%10d'   , 'Checkpoints'        ,  $total_chk        ),
+	  sprintf('%-20s:%13.2f' , 'Pages / Checkpoint'  ,  $pages_per_chk   ),
+	  sprintf('%-20s:%13.2f KB ', 'Bytes / Checkpoint', $pages_per_chk*8 ),
+	  '',
+	  sprintf( '%-20s:%13.2f %' , 'Forced from Buffer', $forced_ratio    ),
+        ]
 }
 sub tables_vacuum2 { 
 	my $o = shift;
@@ -457,7 +477,7 @@ sub over_dbs {
 				'pg_encoding_to_char(encoding) as encoding',
 			         qw( datistemplate  datallowconn  datconnlimit 
 			             datlastsysoid  datfrozenxid  dattablespace
-                                     datconfig      datacl    
+                                     datconfig      datacl        oid
                                  ), 'age(datfrozenxid)',
 	      'pg_size_pretty( pg_database_size(pg_database.datname)) as size',
                                 ],
@@ -486,11 +506,6 @@ sub over_dbs {
           sprintf( '%-18s : %s', 'tablespace'    , $h->{dattablespace}  ),
         ]
 }
-sub calc_read_ratio {
-	my ($read,$hit) = @_ ;
-	return 'infinite' unless $hit;
- 	sprintf '%.4f%%', (100*$read/$hit) ;
-}
 
 sub table_stat {
 	my ($o, $database , $schema, $table) = @_;
@@ -517,6 +532,7 @@ sub table_stat {
 
 	my $r1 =
 	[ sprintf( '%-14s : %s', 'name' ,        $h->{relname}       ),
+	  sprintf( '%-14s : %s', 'oid',          $h->{coid}        ),
 	  sprintf( '%-14s : %s', 'owner',        $h->{owner}         ),
 	  sprintf( '%-14s : %s', 'natts'      ,  $h->{relnatts}      ),
 	  sprintf( '%-14s : %s', 'pages',        $h->{relpages}      ),
@@ -535,7 +551,6 @@ sub table_stat {
 	  sprintf( '%-14s : %s', 'hassubclass',  $h->{relhassubclass}),
 	  sprintf( '%-14s : %s', 'checks'     ,  $h->{relchecks}     ),
 	  sprintf( '%-14s : %s', 'options',      $h->{reloptions}),
-	  sprintf( '%-14s : %s', 'oid',          $h->{coid}        ),
 	  sprintf( '%-14s : %s', 'isshared'   ,  $h->{relisshared}   ),
 	  sprintf( '%-14s : %s', 'filenode',     $h->{relfilenode} ),
 	  sprintf( '%-14s : %s', 'toastrelid' ,  $h->{reltoastrelid} ),
@@ -720,7 +735,7 @@ sub index3 {
 		       idx_tup_fetch,   indexrelid
 		 from        pg_stat_user_indexes s
 			join pg_class c on ( c.relname = s.indexrelname )
-		 where schemaname = 'hip'
+		 where schemaname = $schema
 		 order by 1
 
         [ map { sprintf '%-30s  %10s  %5s %8s %8s %90s', @{$_}[0..5] }

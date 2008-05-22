@@ -1,10 +1,14 @@
 Revision history for Perl extension Pg::Pcurse.
 
-0.15  Thu May 15 23:48:15 2008
+0.16  Thu May 22 23:48:15 2008
         - added format info about pgfouine's log_line_prefix
         - Added the missing Defaults.pm file
+        - show num of default buffers TODO
+        - Ctrl-F in buffers mode, it displays statistics about checkpoints
+        - Fixed indexes mode
+        - Added 'dict' mode for text search dictionaries
 
-0.14  Thu May 15 20:37:08 2008
+0.15  Thu May 15 20:37:08 2008
         - minor display fixes
         - Ctrl-H displays Help screen
         - Ctrl-F appends the contents of the bottom display to /tmp/pcurse.out

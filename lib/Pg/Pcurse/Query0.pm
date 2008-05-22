@@ -15,8 +15,15 @@ our @EXPORT = qw(
 	form_dsn     first_word   databases      databases2 
 	dbconnect    to_d         to_h           search4func 
 	one_type     types2text   object_totals  object_totals_desc
-	misc_system_wide 
+	misc_system_wide          calc_read_ratio
+        object_totals_desc_long
 );
+sub calc_read_ratio {
+        my ($read,$hit) = @_ ;
+        return 'infinite' unless $hit;
+        sprintf '%.4f%%', (100*$read/$hit) ;
+}
+
 sub search4func {
         my ( $o, $func, @dbs) = @_ ;
         for my $d (@dbs) {
@@ -106,17 +113,48 @@ sub types2text {
         $ret;
 }
 	
+
+sub misc_system_wide {
+        my ( $o ) = @_ ;
+        my $dh = dbconnect ( $o, form_dsn($o,'')) or return;
+
+	my $h0 = $dh->select_one_to_hashref(
+		'pg_postmaster_start_time()::timestamp(0) as start' );
+
+	my $h1 = $dh->select_one_to_hashref( 'txid_current()' );
+
+	[ sprintf( '%-17s : %15s', 'postmaster start', $h0->{start}     ), 
+	  sprintf( '%-17s : %15s', 'txid current', $h1->{txid_current}  ),
+        ];
+}
+
 sub object_totals_desc { sprintf '   r   v   i   t   c  S' }
+sub object_totals_desc_long { 
+	( '', '', '', '','',
+          'r = ordinary table,   v = view,             i = index',
+          't = TOAST table,      c = composite type,   S = sequence',
+	)
+}
 
 sub object_totals {
         my ($o, $database, $mode ) = @_;
-        return unless $mode =~ /^ (all | shared | noshared ) $/ox ;
+        return unless $mode =~ /^ (all|shared|noshared|noshared-nosystem) $/ox ;
         my $dh = dbconnect ( $o, form_dsn($o,$database)  ) or return;
 	my $st;
 
 	if ($mode eq 'all') {
 		($st = $dh->{dbh}->prepare(<<""))->execute()   
 			 select relkind, count(2) from pg_class group by 1
+
+	}elsif( $mode eq 'noshared-nosystem') {
+		($st=$dh->{dbh}->prepare(<<""))->execute();   
+		      select relkind, count(2) 
+                      from     pg_class     c 
+                          join pg_namespace n on(n.oid=c.relnamespace)
+		      where not relisshared 
+		            and nspname !~ '^pg_'
+		            and nspname !~ '^information_schema'
+		      group by 1
 
 	}else{
 	 	my $shared = $mode eq 'shared' ? 'true' : 'false';
@@ -134,20 +172,5 @@ sub object_totals {
 	]
 
 }
-
-sub misc_system_wide {
-        my ( $o ) = @_ ;
-        my $dh = dbconnect ( $o, form_dsn($o,'')) or return;
-
-	my $h0 = $dh->select_one_to_hashref(
-		'pg_postmaster_start_time()::timestamp(0) as start' );
-
-	my $h1 = $dh->select_one_to_hashref( 'txid_current()' );
-
-	[ sprintf( '%-17s : %15s', 'postmaster start', $h0->{start}     ), 
-	  sprintf( '%-17s : %15s', 'txid current', $h1->{txid_current}  ),
-        ];
-}
-
 1;
 __END__

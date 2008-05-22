@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                Pg-Pcurse
-version:             0.15
+version:             0.16
 abstract:            Monitors a Postgres cluster
 license:             ~
 author:              

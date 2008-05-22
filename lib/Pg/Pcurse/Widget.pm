@@ -87,6 +87,7 @@ sub _Database_Menu_Choice {
 
 my @MODES = sort qw( Vacuum Stats Procedures Tables Views Users Rules
                      Databases Buffers Indexes Settings Triggers Bucardo
+		     Dict
              );
 sub form_dbmenu {
         my $dbs = shift;
@@ -105,6 +106,7 @@ sub form_dbmenu {
                                 Databases  => sub { $::mode = 'databases' },
                                 Buffers    => sub { $::mode = 'buffers'   },
                                 Indexes    => sub { $::mode = 'indexes'   },
+                                Dict       => sub { $::mode = 'dict'      },
                                 Settings   => sub { $::mode = 'settings'  },
                                 Triggers   => sub { $::mode = 'triggers'  },
                                 Bucardo    => sub { $::mode = 'bucardo'   },
@@ -318,10 +320,12 @@ sub got_L {
         $lb_secret->execute($win_secret);
 }
 sub got_T {
-        return  unless $::mode =~ /^ (tables|databases) $/xo;
+        return  unless $::mode =~ /^ (stats|buffers|tables|databases) $/xo;
         my $mwh = shift;
         my $fun = {  tables     => \& stat_of ,
-                     databases  => \& over3 ,
+                     stats      => \& stat_of ,
+                     databases  => \& over3   ,
+                     buffers    => \& bufcalc ,
                   }->{$::mode||return};
         my $lb_secret  = listbox5_c2 (18,78,0,0, $fun )  or return;
         $lb_secret->draw($win_secret,0);
