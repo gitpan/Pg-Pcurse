@@ -17,7 +17,7 @@ use Pg::Pcurse::Query1;
 use Pg::Pcurse::Query2;
 use Pg::Pcurse::Query3;
 
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 
 our $opt;
 
@@ -27,7 +27,8 @@ our @EXPORT = qw(
 	execute_mode       retrieve_context   capital_context
 	$opt               retrieve_permit    update_big_display
 	analyze            reindex            vacuum   save2file
-	stat_of            over3              bufcalc
+	stat_of            over3              bufcalc  idx3b
+	table2of           rewrite_of
 );
 
 *secondary_listbox = *main::secondary_listbox;
@@ -163,10 +164,6 @@ sub bufferca{
         ]
 }
 
-#sub indexes{ [index2_desc,  @{index2($opt, $::dbname, $::sname )}] }
-#sub procedu{ [get_proc_desc,  @{get_proc($opt, $::dbname, $::sname )}] }
-#sub buffers { [ @{table_buffers( $opt, '')}]}
-
 sub vacuumof {
         my $index = $::big->getField('VALUE');
         my ($f)   = first_word( $::tab->[$index] );
@@ -188,7 +185,6 @@ sub ruleof {
         my $index = $::big->getField('VALUE');
         my ($f)   = first_word( $::tab->[$index] );
         my $text  = rule_of( $opt, $::dbname, $::sname, $f ) or return [];
-	#[  textwrap($text, 50) ];
 }
 
 sub over2  { 
@@ -259,22 +255,46 @@ sub tstat {
 ##########################################################################
 ## Another dispatcher
 sub capital_context {
-	return  unless $::mode =~ /^ (stats|buffers|tables|settings|databases) 
+	return  unless $::mode =~ /^ (stats|buffers|indexes|tables|settings|databases|views|stats|rules) 
                                      $/xo;
-        ({  tables     => \& tdataof ,
-            stats      => \& tdataof ,
-            databases  => \& dbof    ,
-            buffers    => \& bufcalc ,
+        ({  tables     => \& tdataof  ,
+            stats      => \& tdataof  ,
+            indexes    => \& idxdef   ,
+            rules      => \& ruleof,
+            views      => \& viewof   ,
+            stats      => \& mostof   ,
+            databases  => \& dbof     ,
+            buffers    => \& bufcalc  ,
          }->{$::mode||return})->(@_) ;
 }
 
 sub bufcalc {
         bufstat( $opt, $::dbname, $::sname,  ) or return [];
 }
+sub idxdef {
+        my $index = $::big->getField('VALUE');
+        my ($l) = last_word( $::tab->[$index] );
+        indexdef( $opt, $::dbname, $l ) or return [];
+}
+sub idx3b {
+        my $index = $::big->getField('VALUE');
+        my ($l) = last_word( $::tab->[$index] );
+        index3b( $opt, $::dbname, $l ) or return [];
+}
 sub stat_of {
         my $index = $::big->getField('VALUE');
         my ($f) = first_word( $::tab->[$index] );
-        statsoftable( $opt, $::dbname, $::sname, $f ) or return [];
+        statisticsof( $opt, $::dbname, $::sname, $f ) or return [];
+}
+sub rewrite_of {
+        my $index = $::big->getField('VALUE');
+        my ($f) = first_word( $::tab->[$index] );
+        rewriteof( $opt, $::dbname, $::sname, $f ) or return [];
+}
+sub mostof {
+        my $index = $::big->getField('VALUE');
+        my ($f) = first_word( $::tab->[$index] );
+        most_common( $opt, $::dbname, $::sname, $f ) or return [];
 }
 sub tdataof {
         my $index = $::big->getField('VALUE');
@@ -371,6 +391,11 @@ sub do_vacuum_tbl {
         my $index = $::big->getField('VALUE');
         my ($f) = first_word( $::tab->[$index] );
         vacuum_tbl( $opt, $::dbname, $::sname, $f ) or return ;
+}
+sub table2of {
+        my $index = $::big->getField('VALUE');
+        my ($f) = first_word( $::tab->[$index] );
+        table2_of( $opt, $::dbname, $::sname, $f ) or return ;
 }
 sub do_vacuum_db {
         my $index = $::big->getField('VALUE');

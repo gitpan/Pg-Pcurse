@@ -29,7 +29,7 @@ our @EXPORT = qw(
 	get_tables_all_desc      get_tables_all
 	get_views_all_desc       get_views_all
 	index2_desc              index2 
-	index3_desc              index3 
+	index3_desc              index3                  index3b
 	get_index_desc           get_index 
 	table_stats_desc         table_stats 
 	table_stats2_desc        table_stats2 
@@ -228,7 +228,7 @@ sub tables_vacuum2 {
 		       @{$h} ];
 }
 sub table_stats_desc {
-     sprintf '%-23s%15s%15s%13s%11s','NAME','seq-scan','idx_scan', '% seq/idx', 'ndead_tup', 
+     sprintf '%-23s%15s%15s%13s%11s','NAME','seq-scan','idx_scan', '  seq/idx', 'ndead_tup', 
 }
 
 sub format_rat {
@@ -740,7 +740,6 @@ sub index3 {
 
         [ map { sprintf '%-30s  %10s  %5s %8s %8s %90s', @{$_}[0..5] }
 	      @$h ]
-
 }
 
 sub get_index_desc {
@@ -759,6 +758,7 @@ sub get_index {
                        indkey indclass indoption   indexprs      indpred
 		       relpages        reltuples ),
 		     'pg_get_userbyid(relowner) as owner',
+		     'pg_get_indexdef(indexrelid) as def',
 		     'pg_size_pretty(pg_relation_size(indexrelid)) as siz',
 	         ],
 		table=> 'pg_index, pg_class',
@@ -784,6 +784,7 @@ sub get_index {
           sprintf( '%-14s : %s', 'option'     , $h->{indoption}     ),
           sprintf( '%-14s : %s', 'exprs'      , $h->{indexprs}      ),
           sprintf( '%-14s : %s', 'pred'       , $h->{indpred}       ),
+           Curses::Widgets::textwrap( $h->{def} , 60)  ,       
         ]
 
 }
@@ -837,5 +838,34 @@ sub over_dbs3 {
           sprintf( '%-18s : %s', 'tup_deleted'   , $h->{tup_deleted}    ),
         ]
 }
+sub index3b {
+	my ($o, $database , $oid) = @_;
+	my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+	my $h = $dh->select_one_to_hashref( 
+		       [qw( relid         indexrelid    
+			    relname       indexrelname   idx_scan    
+			    idx_tup_read  idx_tup_fetch),
+	                "pg_stat_get_blocks_fetched($oid) as bfetched",
+	                "pg_stat_get_blocks_hit($oid)     as bhit",
+	                "pg_stat_get_numscans($oid)       as nscans",
+                       ],
+			'pg_stat_user_indexes',
+	                [ 'indexrelid', '=', $oid ] );
+
+        [ 
+          sprintf( '%-18s : %s', 'indexrelid'    , $h->{indexrelid}    ),
+	  sprintf( '%-18s : %s', 'relid'         , $h->{relid}         ),
+          sprintf( '%-18s : %s', 'relname'       , $h->{relname}       ),
+          sprintf( '%-18s : %s', 'idx_tup_read'  , $h->{idx_tup_read}  ),
+          sprintf( '%-18s : %s', 'idx_tup_fetch' , $h->{idx_tup_fetch} ),
+          sprintf( '%-18s : %s', 'index scans'   , $h->{nscans}        ),
+          sprintf( '%-18s : %s', 'blocks read'   , $h->{bfetched}      ),
+          sprintf( '%-18s : %s', 'blocks hit'    , $h->{bhit}          ),
+          sprintf( '%-18s : %s', '% read/hit'    , 
+			   calc_read_ratio( $h->{bfetched}, $h->{bhit}) ),
+	]
+}
 
 1;
+__END__
+

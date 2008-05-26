@@ -16,13 +16,13 @@ use Pg::Pcurse::Defaults;
 #*pg_default = *Pg::Pcurse::Defaults::pg_default;
 
 our @EXPORT = qw( 
-	bucardo_conf_of  user_of
-        proc_of		 view_of
-        rule_of		 tbl_data_of              
+	bucardo_conf_of  user_of           indexdef
+        proc_of		 view_of           rewriteof
+        rule_of		 tbl_data_of       table2_of
 	trg_of           tables_of_db      tables_of_db_desc
         statsoftable_desc        statsoftable 
-	all_settings     get_setting
-	dict_desc        dict
+	all_settings     get_setting       most_common
+	dict_desc        dict              statisticsof
 );
 
 sub statsoftable_desc {
@@ -245,7 +245,7 @@ sub tbl_data_of {
 		sprintf( '-[ RECORD  %3s ]-------------------------', $i++),
 		sprintf '%-20s : %s', 'age(xmin)', $h->{age} ; 
 		while( my ($k,$v) = each %$h) {
-			next if $k eq 'xmin';
+			next if $k eq 'age';
 			push @ret,
 		        sprintf '%-20s : %s', $k, $v ; 
 		}
@@ -271,8 +271,7 @@ sub rule_of {
                                 'definition', 'pg_rules',
                                ['schemaname', '=', $schema , 
                                 'and', 'rulename', '=', $rule ]) ;
-
-	 formatrule( $h->{definition} )  ;
+	['', @{ formatrule( $h->{definition} ) }]  ;
 }
 sub tables_of_db_desc {
          sprintf '%-32s  %-17s', 'Table', 'Age (Million)';
@@ -390,6 +389,202 @@ sub dict {
         ]
 
 }
+sub indexdef {
+        my ($o, $database, $oid )= @_;
+        my $dh  = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+	my $h   = $dh->select_one_to_hashref( "pg_get_indexdef($oid) as def");
+        [ '','', Curses::Widgets::textwrap( $h->{def} , 50) ]
+}
+sub statisticsof {
+        my ($o, $database, $schema, $table )= @_;
+        my $dh  = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+        $schema = $dh->quote( $schema );
+        my $st  = $dh->select( [qw( attname  avg_width  null_frac
+		               n_distinct most_common_vals most_common_freqs
+				histogram_bounds correlation
+                             )],
+	                     'pg_stats',
+	                     ['schemaname', '=', $schema,
+                              'and', 'tablename', '=', $dh->quote($table)]);
+
+	my @ret = ( sprintf('%s',$table ), '',
+                    sprintf('%-20s %9s %9s %9s %9s', 'column', 'avg_width', 
+                            'null_frac', 'n_distinct', 
+                            'correlation', 'most_freq') );
+	while ( my $h = $st->fetchrow_hashref ) {
+		push @ret, 
+                sprintf( '%-20s %9s %9.2f %10.2f %10.2f', 
+                         $h->{attname}   , $h->{avg_width} ,
+		 	 $h->{null_frac} , $h->{n_distinct} ,
+		 	 $h->{correlation} , # $h->{most_common_freqs} ,
+                  ); 
+	}
+	\@ret;
+}
+sub freq2str {
+	my ($ref, $mult, $len) = @_;
+	my ($out, $val);
+	$len=$len-4;
+	for (@$ref) {
+	        $val = sprintf '%4.2f', $_*$mult;	
+		$val =~ s/^(.*)\.00$/' 'x(4-length$1).$1/xeo ;
+		$out .= sprintf( "%s%s ", (' 'x$len), $val);  
+	}
+	$out;
+}
+sub occur2str {
+	my ($ref, $mult, $len) = @_;
+	my $out;
+	$out .= sprintf( "%${len}d ",  $_*$mult+.5)  for @$ref;
+	$out;
+}
+sub array2str {
+	my ($res, $len) = @_;
+	my $out;
+	$out .= sprintf "%${len}s ", $_  for @$res;
+	$out;
+}
+sub str2array {
+	my $res = shift||return;
+	$res =~ s/^\{//;
+	$res =~ s/,/, /g;
+	chop$res;
+	[ split /\s*,\s*/, $res ]
+}
+sub sum_freq {
+	my $aref = shift||return;
+	my $sum;
+	$sum += $_  for @$aref;
+	$sum;
+}
+sub largest_len {
+	my $aref = shift||return;
+	my $max;
+	((length)> $max) && ($max=length) for @$aref;
+	$max;
+}
+sub most_common {
+        my ($o, $database, $schema, $table )= @_;
+        my $dh  = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+	my $count = $dh->select_one_to_hashref( 'reltuples','pg_class',
+                                    ['relname','=', $dh->quote($table)
+                                    ]);
+	$count = $count->{reltuples};
+        (my $st   = $dh->{dbh}->prepare( <<""))->execute($schema,$table);
+		            select   attname,  most_common_freqs,
+				     most_common_vals 
+	                    from  pg_stats 
+	                    where schemaname = ?
+                               and   tablename= ?
+
+	my @ret = sprintf '%-s %-20s  (rows=%s)', 'TABLE  ', $table , $count ;
+	while ( my $h= $st->fetchrow_hashref) {
+		 my $aref = $h->{most_common_freqs};
+		 my $cval = str2array $h->{most_common_vals};
+	         push @ret, '-' x 73,
+	                     sprintf( 'COLUMN: %s', $h->{attname});
+		 next unless @{$h}{most_common_freqs};
+		 my $sum_of_common_freqs = sum_freq( $aref);
+		 my $num_of_common_vals  = @$cval;
+		 my $largest_len         = largest_len $cval;
+		 $largest_len <4 and $largest_len = 5;
+		 push @ret, sprintf('%-12s = %s', 'common vals',
+				array2str( $cval, $largest_len )),
+	                    sprintf( '%-12s = %s', 'common freqs',
+					freq2str $aref, 1, $largest_len),
+			    sprintf('%-12s = %s', 'occurrences',
+                                        occur2str $aref,$count, $largest_len),
+	         #sprintf('%-15s = %3.4f','prob of other values', 
+		  #(1-$sum_of_common_freqs)/($count-$num_of_common_vals)),
+	         #sprintf('%-15s = %3.4f','occurence of other values', 
+		  #$count*(1-$sum_of_common_freqs)/($count-$num_of_common_vals))
+	}
+	\@ret;
+}
+sub table2_of {
+        my ($o, $database , $schema, $table) = @_;
+        my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+        my $h  = $dh->select_one_to_hashref( [qw(  relname     seq_scan
+                                    n_tup_ins      n_tup_upd   n_tup_del
+                                    n_tup_hot_upd  n_live_tup  n_dead_tup
+                                    seq_tup_read   idx_scan    idx_tup_fetch
+                                    last_vacuum    last_autovacuum 
+                                    last_analyze   last_autoanalyze
+                               )],
+                              'pg_stat_user_tables',
+                              ['relname', '=', $dh->quote($table),
+                               'and','schemaname', '=', $dh->quote($schema)] );
+
+
+        my $r1=
+	[ sprintf('%-20s : %s', 'relname'  ,     $h->{relname}          ),
+	  sprintf('%-20s : %s', 'seq_scan',      $h->{seq_scan}         ),
+	  sprintf('%-20s : %s', 'idx_scan',      $h->{idx_scan}         ),
+	  sprintf('%-20s : %s', 'Ratio', 
+                calc_read_ratio  $h->{seq_scan}, $h->{idx_scan}         ),
+	  sprintf('%-20s : %s', 'seq_tup_read',  $h->{seq_tup_read}     ),
+	  sprintf('%-20s : %s', 'idx_tup_fetch', $h->{idx_tup_fetch}    ),
+	  sprintf('%-20s : %s', 'n_tup_ins',     $h->{n_tup_ins}        ),
+	  sprintf('%-20s : %s', 'n_tup_upd',     $h->{n_tup_upd}        ),
+	  sprintf('%-20s : %s', 'n_tup_del',     $h->{n_tup_del}        ),
+	  sprintf('%-20s : %s', 'n_tup_hot_upd', $h->{n_tup_hot_upd}    ),
+	  sprintf('%-20s : %s', 'n_live_tup',    $h->{n_live_tup}       ),
+	  sprintf('%-20s : %s', 'n_dead_tup',    $h->{n_dead_tup}       ),
+	];
+
+          $h  = $dh->select_one_to_hashref( [qw( 
+				relid           heap_blks_read   heap_blks_hit  
+				idx_blks_read   idx_blks_hit     toast_blks_read
+				toast_blks_hit  tidx_blks_read   tidx_blks_hit
+                               )],
+                              'pg_statio_user_tables',
+                              ['relname', '=', $dh->quote($table),
+                               'and','schemaname', '=', $dh->quote($schema)] );
+
+        my $r2=
+	[ sprintf('%-20s : %s', 'heap_blks_read' ,  $h->{heap_blks_read  }),
+	  sprintf('%-20s : %s', 'heap_blks_hit'  ,  $h->{heap_blks_hit   }),
+	  sprintf('%-20s : %s', 'idx_blks_read'  ,  $h->{idx_blks_read   }),
+	  sprintf('%-20s : %s', 'idx_blks_hit'   ,  $h->{idx_blks_hit    }),
+	  sprintf('%-20s : %s', 'toast_blks_read',  $h->{toast_blks_read }),
+	  sprintf('%-20s : %s', 'toast_blks_hit' ,  $h->{toast_blks_hit  }),
+	  sprintf('%-20s : %s', 'tidx_blks_read' ,  $h->{tidx_blks_read  }),
+	  sprintf('%-20s : %s', 'tidx_blks_hit'  ,  $h->{tidx_blks_hit   }),
+	];
+	[ @$r1, @$r2 ]
+}
+sub ev_type {
+	return {  1 => 'SELECT' ,
+	          2 => 'UPDATE' ,
+	          3 => 'INSERT' ,
+	          4 => 'DELETE' ,
+                 }->{shift||return};
+}
+
+sub rewriteof {
+        my ($o, $database , $schema, $rule) = @_;
+        my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+        my $h  = $dh->select_one_to_hashref( [qw( rulename     ev_qual     
+                                                  ev_attr      ev_type 
+					          ev_enabled   is_instead  
+                                                  ev_class::regclass 
+                               )],
+                              'pg_rewrite',
+                              ['rulename', '=', $dh->quote($rule) ]);
+
+	[ sprintf('%-20s : %s', 'rulename'  ,     $h->{rulename}         ),
+	  sprintf('%-20s : %s', 'ev_class'  ,     $h->{ev_class}         ),
+	  sprintf('%-20s : %s', 'ev_qual'   ,     $h->{ev_qual}          ),
+	  sprintf('%-20s : %s', 'ev_attr'   ,     $h->{ev_attr}          ),
+	  sprintf('%-20s : %s', 'ev_enabled',     $h->{ev_enabled}       ),
+	  sprintf('%-20s : %s', 'ev_instead'  ,   $h->{is_instead}       ),
+	  sprintf('%-20s : %s %10s', 'ev_type',   $h->{ev_type},
+                                                  ev_type($h->{ev_type}) ),
+        ]
+}
+
 
 1;
 __END__
+
+

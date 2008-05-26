@@ -320,12 +320,14 @@ sub got_L {
         $lb_secret->execute($win_secret);
 }
 sub got_T {
-        return  unless $::mode =~ /^ (stats|buffers|tables|databases) $/xo;
+        return  unless $::mode =~ /^ (stats|buffers|rules|tables|databases|indexes) $/xo;
         my $mwh = shift;
-        my $fun = {  tables     => \& stat_of ,
-                     stats      => \& stat_of ,
-                     databases  => \& over3   ,
-                     buffers    => \& bufcalc ,
+        my $fun = {  tables     => \& table2of   ,
+                     stats      => \& stat_of    ,
+                     indexes    => \& idx3b      ,
+                     rules      => \& rewrite_of ,
+                     databases  => \& over3      ,
+                     buffers    => \& bufcalc    ,
                   }->{$::mode||return};
         my $lb_secret  = listbox5_c2 (18,78,0,0, $fun )  or return;
         $lb_secret->draw($win_secret,0);
