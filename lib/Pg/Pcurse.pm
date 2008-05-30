@@ -17,7 +17,7 @@ use Pg::Pcurse::Query1;
 use Pg::Pcurse::Query2;
 use Pg::Pcurse::Query3;
 
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 
 our $opt;
 
@@ -112,8 +112,16 @@ sub show_vacuum  {
         ($::dbname) = first_word( $choi->[ $::schemas->getField('VALUE')]);
         update_big_display( \&tables_of_db_desc, \&tables_of_db) ;
 }
+sub show_buffers { 
+        my $choi = [ 'user', 'system & user', 'not_cached'];
+	update_section_display ('', $choi);
+        update_big_display( \& pgbuffercache_desc, \& bufferca_);
+}
+sub bufferca_{ 
+	pgbuffercache $opt, $::dbname, $::secname;
+}
+#sub show_buffers  { big_display_only( sub{''}, \& table_buffers )} 
 sub show_databases{ big_display_only( \& all_databases_desc,\& all_databases) } 
-sub show_buffers  { big_display_only( sub{''}, \& table_buffers )} 
 sub show_bucardo  { big_display_only( \& bucardo_conf_desc, \& bucardo_conf)} 
 sub show_users    { big_display_only( \&get_users_desc, \&get_users     )  }
 
@@ -263,6 +271,7 @@ sub capital_context {
             rules      => \& ruleof,
             views      => \& viewof   ,
             stats      => \& mostof   ,
+            settings   => \& fsmvals  ,
             databases  => \& dbof     ,
             buffers    => \& bufcalc  ,
          }->{$::mode||return})->(@_) ;

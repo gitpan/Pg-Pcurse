@@ -30,15 +30,15 @@ unless (my $dh = dbconnect ( $opt, form_dsn($opt, '' ) ) ) {
 	exit(0);
 }
 
-#print Dumper most_common( $opt, 'hiphop', 'hip', 'visionuser'); exit;
-#print Dumper rewriteof( $opt, 'hiphop', 'hip', 'subscr_insert'); exit; 
+#print Dumper  fsm_settings( $opt, 'misc' ) ; exit;
+#print Dumper pgbuffercache( $opt, 'misc', 'not_cached'); exit; 
 init_screen;
 $::mwh  = create_root;
 my $dbs  = [ databases2 $opt ];
 my $main = form_dbmenu ($dbs);
 undef $::db;
-$::mode='buffers';
 $::mode='stats';
+$::mode='buffers';
 $::mode='tables';
 
 init_mini_root;

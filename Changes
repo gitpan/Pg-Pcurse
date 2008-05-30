@@ -1,12 +1,15 @@
 Revision history for Perl extension Pg::Pcurse.
 
-0.17  Sun May 25 07:47:58 2008
+0.18  Sun May 25 07:47:58 2008
 	- Added index definition
 	- In statistics mode, added pg_stats for Ctrl-T and Ctrl-L
 	- In tables mode, added pg_statio for Ctrl-T 
 	- In rules mode, added pg_rewrite for Ctrl-T 
+	- Re-arranged buffers mode. Added filters and more info
+          in big display; 'd' shows summary; Ctl-F shows stats and settings.
+	- In settings mode, Ctrl-L views fsm rations
 
-0.16  Thu May 22 23:48:15 2008
+0.17  Thu May 22 23:48:15 2008
         - added format info about pgfouine's log_line_prefix
         - Added the missing Defaults.pm file
         - show num of default buffers TODO

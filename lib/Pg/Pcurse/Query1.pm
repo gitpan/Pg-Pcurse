@@ -21,7 +21,7 @@ our @EXPORT = qw(
 	reindex_tbl    reindex_db      table_stat
 	get_tables2_desc         tables_vacuum_desc   
 	bucardo_conf_desc 	 bucardo_conf
-        pgbuffercache            buffercache_summary
+        pgbuffercache            buffercache_summary  pgbuffercache_desc
 	get_nspacl               all_databases_age       bufstat
 
 	all_databases_desc       all_databases 
@@ -479,6 +479,7 @@ sub over_dbs {
 			             datlastsysoid  datfrozenxid  dattablespace
                                      datconfig      datacl        oid
                                  ), 'age(datfrozenxid)',
+	      'pg_database_size(pg_database.datname) as bytes',
 	      'pg_size_pretty( pg_database_size(pg_database.datname)) as size',
                                 ],
                       table => 'pg_database,pg_stat_database',
@@ -502,7 +503,8 @@ sub over_dbs {
           sprintf( '%-18s : %s', 'acl', $h->{datacl} && "@{$h->{datacl}}" ),
           sprintf( '%-18s : %s', 'xact_commit'   , $h->{xact_commit}    ),
           sprintf( '%-18s : %s', 'xact_rollback' , $h->{xact_rollback}  ),
-          sprintf( '%-18s : %s', 'pg_size'       , $h->{size}           ),
+          sprintf( '%-18s : %d', 'db_pages'      , $h->{bytes}/1024/8   ),
+          sprintf( '%-18s : %s', 'db_size'       , $h->{size}           ),
           sprintf( '%-18s : %s', 'tablespace'    , $h->{dattablespace}  ),
         ]
 }
@@ -581,33 +583,6 @@ sub table_stat {
 	[@$r1,@$r2]
 }
 
-sub pgbuffercache {
-        my ($o, $database )= @_;
-        my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
-
-        my $h = $dh->select_one_to_hashref(<<"");
-	   user in (select rolname from pg_roles where rolsuper) as super
-
-        return [ q(Must be in a "super" role to view buffer data.) ]
-                     unless $h->{super}; 
-	my $db_of_func = search4func( $o, 'pg_buffercache_pages',
-                                        $database, databases2 $o ) ;
-        return [q(public.pg_buffercache found in any database.)] 
-                   unless $db_of_func;
-
-	if ($db_of_func eq $database) {
-		$h = $dh->{dbh}->selectall_arrayref( <<"");
-			select relfilenode::regclass as name, count(1)
-			from   pg_buffercache
-			where  relfilenode is not null
-			group  by 1
-			order  by 2 desc
-
-		return [ map { sprintf '%-35s : %9s', @{$_}[0..1] }  @$h ]; 
-	}else{
-		return [ "public.pg_buffercache is at $db_of_func" ];
-	}
-}   
 
 sub fsm_settings {
         my ($o, $database )= @_;
@@ -865,7 +840,74 @@ sub index3b {
 			   calc_read_ratio( $h->{bfetched}, $h->{bhit}) ),
 	]
 }
+sub pgbuffercache_desc {
+	sprintf '%-36s  %9s %10s %20s',  
+		'name', 'count', 'relpages', '% count/relpages'
+}
+sub pgbuffercache {
+        my ($o, $database, $mode )= @_;
+        my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+
+        my $h = $dh->select_one_to_hashref(<<"");
+	   user in (select rolname from pg_roles where rolsuper) as super
+
+        return [ q(Must be in a "super" role to view buffer data.) ]
+                     unless $h->{super}; 
+	my $db_of_func = search4func( $o, 'pg_buffercache_pages',
+                                        $database, databases2 $o ) ;
+        return [q(public.pg_buffercache found in any database.)] 
+                   unless $db_of_func;
+
+	if ($db_of_func eq $database) {
+		goto &not_cached  if $mode =~ /^not_cached$/io;
+		(my $st = $dh->{dbh}->prepare(<<""))->execute;
+		select B.relfilenode::regclass as name, count(1), relpages
+		from   pg_buffercache B join pg_class C on (B.relfilenode=C.oid)
+		where  B.relfilenode is not null
+		group  by 1, relpages
+		order  by 2 desc
+
+		my @ret;
+		while (my $h = $st->fetchrow_hashref) {
+		     my ($name,$count,$size)=@{$h}{'name','count','relpages'};
+		     next if ($mode =~ /^user$/io)&&( $name =~ /^pg_/o);
+		     push @ret, sprintf '%-35s : %9s %10s %10.0f%%', 
+                                        @{$h}{'name','count','relpages'},
+                                        calc_read_ratio($count, $size);
+		} 
+		return \@ret;
+	}else{
+		return [ "public.pg_buffercache is at $db_of_func" ];
+	}
+}   
+sub not_cached {
+        my ($o, $database, $mode )= @_;
+        my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+	my $h  = $dh->{dbh}->selectall_arrayref(<<"");
+		select relname, relkind, relpages
+		from pg_class
+		where relkind in ('r','i')
+		and relname !~ '^[0-9]+$$'
+		and relname !~ '^pg_'
+		and relname !~ '^sql_'
+		and  relfilenode in
+			(select relfilenode
+			from   pg_class C
+			where  relkind in ('r','i')
+			EXCEPT
+			select relfilenode
+			from   pg_buffercache B
+			where  B.relfilenode is not null)
+		order by 2
+
+	my $total;
+	[ do {map { $total+= ${$_}[2] ; sprintf '%-35s  %-9s %8s', @{$_}[0..2] }
+			      @$h
+	  } , 
+         '', 
+	  sprintf( '%45s  %8d', 'Total', $total)
+       ];
+}
 
 1;
 __END__
-
