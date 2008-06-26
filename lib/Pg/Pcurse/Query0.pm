@@ -16,7 +16,7 @@ our @EXPORT = qw(
 	dbconnect    to_d         to_h           search4func 
 	one_type     types2text   object_totals  object_totals_desc
 	misc_system_wide          calc_read_ratio
-        object_totals_desc_long
+        object_totals_desc_long   oid2name_per_db
 );
 sub calc_read_ratio {
         my ($read,$hit) = @_ ;
@@ -172,5 +172,15 @@ sub object_totals {
 	]
 
 }
+
+sub oid2name_per_db {
+        my ($o, $database ) = @_;
+        my $dh = dbconnect ( $o, form_dsn($o,$database)  ) or return;
+	my $h  = $dh->select_all_to_hashref(  'oid, relname', 
+                                              'pg_class');
+                     #                       q(     relname !~ '^pg_' 
+                     #                          and relname !~ '^sql_') );
+}
 1;
 __END__
+                     'and', 'relname','!~','^sql_']);

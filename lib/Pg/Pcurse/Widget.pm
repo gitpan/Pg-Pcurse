@@ -231,8 +231,8 @@ sub main_listbox {
 	  };
 }
 sub secondary_listbox {
-	my ($title, $list, $y, $x, $lines) = @_;
-	$lines or $lines = @$list;
+	my ($title, $list, $y, $x, $val) = @_;
+	#$lines or $lines = @$list;
 	assert( ref($list), 'ARRAY') if DEBUG;
 	new Curses::Widgets::ListBox {
 		  Y           => $y,
@@ -247,14 +247,13 @@ sub secondary_listbox {
 		  SELECTEDCOL => 'green',
 		  CAPTION     => $title,
 		  CAPTIONCOL  => 'yellow',
-		  VALUE       => ($::schemas)
-                                   ? $::schemas->getField('VALUE') : 0
-                                 ,
+		  CURSORPOS   => $val||0,
+		  VALUE       => $val||0,
 	  };
 }
 sub big_listbox {
-	my ($title, $list, $y, $x, $lines) = @_;
-	$lines or $lines = @$list;
+	my ($title, $list, $y, $x, $val) = @_;
+	#$lines or $lines = @$list;
 	assert( ref($list), 'ARRAY') if DEBUG;
 	new Curses::Widgets::ListBox {
 		  Y           => $y,
@@ -263,9 +262,10 @@ sub big_listbox {
 		  LINES       => 12,
 		  LISTITEMS   => $list,
 		  MULTISEL    => 0,
-		  VALUE       => 0,
+ 		  VALUE       => $val||0,
 		  INPUTFUNC   => \&jscan,
 		  FOCUSSWITCH => "\tl",
+		  CURSORPOS   => $val||0,
 		  SELECTEDCOL => 'green',
 		  CAPTION     => $title,
 		  CAPTIONCOL  => 'yellow',
@@ -320,11 +320,12 @@ sub got_L {
         $lb_secret->execute($win_secret);
 }
 sub got_T {
-        return  unless $::mode =~ /^ (stats|buffers|rules|tables|databases|indexes) $/xo;
         my $mwh = shift;
+	eval{
         my $fun = {  tables     => \& table2of   ,
                      stats      => \& stat_of    ,
                      indexes    => \& idx3b      ,
+                     vacuum     => \& table3of   ,
                      rules      => \& rewrite_of ,
                      databases  => \& over3      ,
                      buffers    => \& bufcalc    ,
@@ -332,6 +333,7 @@ sub got_T {
         my $lb_secret  = listbox5_c2 (18,78,0,0, $fun )  or return;
         $lb_secret->draw($win_secret,0);
         $lb_secret->execute($win_secret);
+	} or return;
 }
 sub display_keyword {
 	my $keyword = shift||return;

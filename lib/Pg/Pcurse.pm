@@ -17,7 +17,7 @@ use Pg::Pcurse::Query1;
 use Pg::Pcurse::Query2;
 use Pg::Pcurse::Query3;
 
-our $VERSION = '0.18';
+our $VERSION = '0.20';
 
 our $opt;
 
@@ -28,12 +28,13 @@ our @EXPORT = qw(
 	$opt               retrieve_permit    update_big_display
 	analyze            reindex            vacuum   save2file
 	stat_of            over3              bufcalc  idx3b
-	table2of           rewrite_of
+	table2of           table3of           rewrite_of
 );
 
 *secondary_listbox = *main::secondary_listbox;
 *big_listbox       = *main::big_listbox;
 *create_button     = *main::create_button;
+*display_strings   = *main::display_strings;
 
 
 #########################################################################
@@ -58,13 +59,14 @@ sub execute_mode {
          } -> {$mode})->();
 }
 
-
 #########################################################################
 
 sub update_schema_display {
         #  Schema Table
         $::she     = get_schemas2( $opt, $::dbname) or return;
-        $::schemas = secondary_listbox('Schemas', $::she, 2,37);
+	my $val;
+        eval { $val=0; $val = $::schemas->getField('VALUE')  };
+        $::schemas = secondary_listbox('Schemas', $::she, 2,37, $val);
         $::schemas->execute($::mwh,0);
         ($::sname) = first_word( $::she->[ $::schemas->getField('VALUE')] );
 }
@@ -74,7 +76,9 @@ sub update_big_display {
        ($::desc, $::actual) = @_ ;
         $::desc    = $::desc->();
         $::tab     = $::actual->( $opt, $::dbname, $::sname, $::secname);
-        $::big     = big_listbox( $::desc, $::tab, 11, 0);
+	my $val;
+        eval { $val=0; $val = $::big->getField('VALUE')  };
+        $::big     = big_listbox( $::desc, $::tab, 11, 0, $val);
         $::big->execute($::mwh,0);
 }
 sub disable_schema_display {
@@ -95,7 +99,9 @@ sub whole_movie {
 sub update_section_display {
 	my ($title, $choices) = @_ ;
 	$::she = $choices;
-        $::schemas  = secondary_listbox( $title, $::she, 2,37);
+	my $val;
+        eval { $val=0; $val = $::schemas->getField('VALUE')  };
+        $::schemas  = secondary_listbox( $title, $::she, 2,37,$val);
         $::schemas->execute($::mwh,0);
         ($::secname) = first_word( $::she->[ $::schemas->getField('VALUE')]);
 }
@@ -106,12 +112,6 @@ sub show_settings {
 	update_section_display ('Context', $choi);
         update_big_display( sub{''}, \& all_settings);
 }
-sub show_vacuum  { 
-        my $choi = all_databases_age($opt);
-	update_section_display ('Databases            Age (Million)', $choi);
-        ($::dbname) = first_word( $choi->[ $::schemas->getField('VALUE')]);
-        update_big_display( \&tables_of_db_desc, \&tables_of_db) ;
-}
 sub show_buffers { 
         my $choi = [ 'user', 'system & user', 'not_cached'];
 	update_section_display ('', $choi);
@@ -120,7 +120,6 @@ sub show_buffers {
 sub bufferca_{ 
 	pgbuffercache $opt, $::dbname, $::secname;
 }
-#sub show_buffers  { big_display_only( sub{''}, \& table_buffers )} 
 sub show_databases{ big_display_only( \& all_databases_desc,\& all_databases) } 
 sub show_bucardo  { big_display_only( \& bucardo_conf_desc, \& bucardo_conf)} 
 sub show_users    { big_display_only( \&get_users_desc, \&get_users     )  }
@@ -133,7 +132,7 @@ sub show_procedu { whole_movie( \&get_proc_desc, \&get_proc             )  }
 sub show_indexes { whole_movie( \&index3_desc, \&index3                 )  }
 sub show_rules   { whole_movie( \&rules_desc, \&rules                   )  }
 sub show_triggers{ whole_movie( \&schema_trg_desc, \&schema_trg         )  }
-
+sub show_vacuum  { whole_movie( \&tables_vacuum_desc, \&tables_vacuum   )  }
 
 
 ## Another dispatcher
@@ -168,15 +167,16 @@ sub stats2 { [table_stats2_desc,  @{table_stats2($opt, $::dbname, $::sname )}]}
 sub bufferca{ 
 	[ @{buffercache_summary( $opt, $::dbname)} ,
 	  '','',
-	  @{ pgbuffercache( $opt, $::dbname)} ,
+	  #@{ pgbuffercache( $opt, $::dbname)} ,
+	  @{ pgbufpages( $opt, $::dbname, $::secname)} ,
         ]
 }
 
 sub vacuumof {
         my $index = $::big->getField('VALUE');
         my ($f)   = first_word( $::tab->[$index] );
-        #vacuum_per_table( $opt, $::dbname, $::sname, $f ) or return [];
-        vacuum_per_table( $opt, $::dbname, split(/\./, $f,2) ) or return [];
+        vacuum_per_table( $opt, $::dbname, $::sname, $f ) or return [];
+        #vacuum_per_table( $opt, $::dbname, split(/\./, $f,2) ) or return [];
 }
 sub userof {
         my $index = $::big->getField('VALUE');
@@ -245,41 +245,49 @@ sub over3  {
 
 sub procof {
         my $index = $::big->getField('VALUE')   ; 
-        my $last = last_word( $::tab->[$index] )   or return ['selection?'] ;
+        my $last  = last_word( $::tab->[$index] )   or return ['selection?'] ;
         proc_of( $opt, $::dbname, $last );
 }
 
 sub indexof {
         my $index = $::big->getField('VALUE')   ; 
-        my $last = last_word( $::tab->[$index] )   or return ['selection?'] ;
+        my $last  = last_word( $::tab->[$index] )   or return ['selection?'] ;
         get_index( $opt, $::dbname, $last ) or return [];
 }
 sub tstat {
         my $index = $::big->getField('VALUE');
-        my ($f) = first_word( $::tab->[$index] );
+        my ($f)   = first_word( $::tab->[$index] );
         table_stat( $opt, $::dbname, $::sname, $f ) or return [];
 }
 
 ##########################################################################
 ## Another dispatcher
 sub capital_context {
-	return  unless $::mode =~ /^ (stats|buffers|indexes|tables|settings|databases|views|stats|rules) 
-                                     $/xo;
+        eval{
         ({  tables     => \& tdataof  ,
             stats      => \& tdataof  ,
             indexes    => \& idxdef   ,
-            rules      => \& ruleof,
+            rules      => \& ruleof   ,
             views      => \& viewof   ,
             stats      => \& mostof   ,
             settings   => \& fsmvals  ,
             databases  => \& dbof     ,
-            buffers    => \& bufcalc  ,
+            buffers    => \& pgbufall ,
+            vacuum     => \& v_settings ,
          }->{$::mode||return})->(@_) ;
+	 };
 }
 
-sub bufcalc {
-        bufstat( $opt, $::dbname, $::sname,  ) or return [];
+sub v_settings{ vac_settings $opt }
+sub pgbufall{ pgbuff_all $opt, $::dbname, $::secname }
+sub bufcalc { 
+	     [ '',
+               @{buffercache_summary( $opt, $::dbname)} ,
+	       '',
+               @{bufstat( $opt, $::dbname, $::sname)},
+	     ]
 }
+
 sub idxdef {
         my $index = $::big->getField('VALUE');
         my ($l) = last_word( $::tab->[$index] );
@@ -351,6 +359,8 @@ sub update_big_d {
 sub update_bigbox_inc {
         $::tab = ({ tables    => \& tables_brief,
                     stats     => \& table_stats,
+                    #vacuum    => \& tables_of_db,
+                    vacuum    => \& tables_vacuum,
                     databases => \& all_databases,
                  } -> {$::mode})->($opt, $::dbname, $::sname);
 	$::big->setField( LISTITEMS => $::tab );
@@ -359,6 +369,7 @@ sub analyze  {
         return unless $::mode =~ qr/^ (tables|stats|databases|vacuum) $/xo;
         ({ tables    => \& do_analyze_tbl,
            stats     => \& do_analyze_tbl,
+           vacuum    => \& do_analyze_tbl,
            databases => \& do_analyze_db,
         } -> {$::mode})->() ? display_keyword 'ANALYZE'
                             : display_keyword 'failed';
@@ -369,6 +380,7 @@ sub vacuum  {
         return unless $::mode =~ qr/^ (tables|stats|databases|vacuum) $/xo;
         ({ tables    => \& do_vacuum_tbl,
            stats     => \& do_vacuum_tbl,
+           vacuum    => \& do_vacuum_tbl,
            databases => \& do_vacuum_db,
         } -> {$::mode})->() ? display_keyword 'VACUUM' 
                             : display_keyword 'failed' ;
@@ -394,7 +406,8 @@ sub do_analyze_tbl {
 sub do_analyze_db {
         my $index = $::big->getField('VALUE');
         my ($f) = first_word( $::tab->[$index] );
-        analyze_db( $opt, $::dbname ) or return ;
+        #analyze_db( $opt, $::dbname ) or return ;
+        analyze_db( $opt, $f ) or return ;
 }
 sub do_vacuum_tbl {
         my $index = $::big->getField('VALUE');
@@ -406,10 +419,18 @@ sub table2of {
         my ($f) = first_word( $::tab->[$index] );
         table2_of( $opt, $::dbname, $::sname, $f ) or return ;
 }
-sub do_vacuum_db {
+sub table3of {
         my $index = $::big->getField('VALUE');
         my ($f) = first_word( $::tab->[$index] );
-        vacuum_db( $opt, $::dbname ) or return ;
+	my $nsp = $::sname;
+	($f=~/\w\.\w/ )  and ($nsp,$f) = split /\./, $f ;
+        table3_of( $opt, $::dbname, $nsp, $f ) or return ;
+}
+sub do_vacuum_db {
+        my $index = $::big->getField('VALUE');
+        my ($f)   = first_word( $::tab->[$index] );
+        #vacuum_db( $opt, $::dbname ) or return ;
+        vacuum_db( $opt, $f ) or return ;
 }
 sub save2file {
 	eval { open my ($i) , '>>/tmp/pcurse.out';

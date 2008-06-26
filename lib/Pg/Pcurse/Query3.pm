@@ -18,11 +18,13 @@ use Pg::Pcurse::Defaults;
 our @EXPORT = qw( 
 	bucardo_conf_of  user_of           indexdef
         proc_of		 view_of           rewriteof
-        rule_of		 tbl_data_of       table2_of
+        rule_of		 tbl_data_of       table2_of	table3_of
 	trg_of           tables_of_db      tables_of_db_desc
-        statsoftable_desc        statsoftable 
+        statsoftable     statsoftable_desc vac_settings        
 	all_settings     get_setting       most_common
 	dict_desc        dict              statisticsof
+        pgbuff_all	 pgbuff_all_desc   pgbufpages 
+        tables_vacuum    tables_vacuum_desc 
 );
 
 sub statsoftable_desc {
@@ -286,27 +288,26 @@ sub tables_of_db {
 		where relkind = 'r'
 			and nspname not like 'pg_%'
 			and nspname not like 'information_schema'
-		order by 2 desc
+		order by 1
 
         [ map { sprintf '%-40s  %5.3f', ${$_}[0], ${$_}[1]/1_000_000 } @$h ]
-;
-
 }
+
 sub are_equal {
 	my ($actual, $default) = @_;
-	return 1  if ($actual eq'60s' and $default eq '1min');
-	return 1  if ($actual eq'1024kB' and $default eq '1MB');
-	return 1  if ($actual eq'2048kB' and $default eq '2MB');
-	return 1  if ($actual eq'16384kB' and $default eq '16MB');
-	return 1  if ($actual eq'10240kB' and $default eq '10MB');
-	return 1  if ($actual eq'300s' and $default eq '5min');
-	return 1  if ($actual eq'1000ms' and $default eq '1s');
-	return 1  if ($actual eq'1440min' and $default eq '1d');
-	return 1  if ($actual eq'88kB' and $default eq '64kB');
-	return 1  if ($actual eq'-1kB' and $default eq '-1');
-	return 1  if ($actual eq'-1ms' and $default eq '-1');
-	return 1  if ($actual eq'10248kB' and $default eq '8MB');
-	return 1  if ($actual eq'163848kB' and $default eq '128MB');
+	return 1  if ($actual eq'60s'      and   $default eq '1min' );
+	return 1  if ($actual eq'1024kB'   and   $default eq '1MB'  );
+	return 1  if ($actual eq'2048kB'   and   $default eq '2MB'  );
+	return 1  if ($actual eq'16384kB'  and   $default eq '16MB' );
+	return 1  if ($actual eq'10240kB'  and   $default eq '10MB' );
+	return 1  if ($actual eq'300s'     and   $default eq '5min' );
+	return 1  if ($actual eq'1000ms'   and   $default eq '1s'   );
+	return 1  if ($actual eq'1440min'  and   $default eq '1d'   );
+	return 1  if ($actual eq'88kB'     and   $default eq '64kB' );
+	return 1  if ($actual eq'-1kB'     and   $default eq '-1'   );
+	return 1  if ($actual eq'-1ms'     and   $default eq '-1'   );
+	return 1  if ($actual eq'10248kB'  and   $default eq '8MB'  );
+	return 1  if ($actual eq'163848kB' and   $default eq '128MB');
 	return;
 }
 
@@ -583,8 +584,207 @@ sub rewriteof {
         ]
 }
 
+sub pgbuff_all_desc {
+	sprintf '%-16s  %-35s %8s',  'dbname', 'name', 'count'
+}
+sub pgbuff_all {
+        my ($o, $database, $mode )= @_;
+        my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+
+        my $h = $dh->select_one_to_hashref(<<"");
+	   user in (select rolname from pg_roles where rolsuper) as super
+
+        return [ q(Must be in a "super" role to view buffer data.) ]
+                     unless $h->{super}; 
+	my $db_of_func = search4func( $o, 'pg_buffercache_pages',
+                                        $database, databases2 $o ) ;
+        return [q(public.pg_buffercache found in any database.)] 
+                   unless $db_of_func;
+
+	if ($db_of_func eq $database) {
+                return ['Not Implemented']  if $mode =~ /^not_cached$/io;
+		(my $st = $dh->{dbh}->prepare(<<""))->execute;
+			select D.datname, B.relfilenode as oid, count(1)
+			from   pg_buffercache B
+			       join pg_database D  on ( D.oid=B.reldatabase)
+			--where  B.relfilenode::regclass::text !~ '^pg_'
+			group  by datname, B.relfilenode --, relpages
+			order  by 1 , count desc
+
+		my (%o2n, $tcount);
+		$o2n{$database} = oid2name_per_db($o, $database);
+		my @ret;
+		while (my $h = $st->fetchrow_hashref) {
+		     my ($db,$oid,$count)=@{$h}{'datname', 'oid','count'};
+                     exists $o2n{$db} or $o2n{$db}=oid2name_per_db($o,$db);
+                     my $name  = $o2n{$db}->{$oid} || $oid  ;
+		     next if ($mode =~ /^user$/io)&&( $name =~ /^pg_/o);
+		     $tcount += $count;
+		     push @ret, sprintf '%-15s : %-35s %8d', $db, $name, $count
+		} 
+		return [ pgbuff_all_desc, '' , 
+	                 sprintf( '%53s = %6d', 'Total', $tcount),
+                         '', @ret
+                       ] ;
+	}else{
+		return [ "public.pg_buffercache is at $db_of_func" ];
+	}
+}   
+sub pgbufpages_desc {
+	sprintf '%-16s  %-35s %5s %8s', 'dbname', 'relation', 
+				'block', 'bytes', 
+}
+sub pgbufpages {
+        my ($o, $database, $mode )= @_;
+        my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+
+        my $h = $dh->select_one_to_hashref(<<"");
+	   user in (select rolname from pg_roles where rolsuper) as super
+
+        return [ q(Must be in a "super" role to view buffer data.) ]
+                     unless $h->{super}; 
+	my $db_of_func = search4func( $o, 'pg_buffercache_pages',
+                                        $database, databases2 $o ) ;
+        return [q(public.pg_buffercache found in any database.)] 
+                   unless $db_of_func;
+
+	if ($db_of_func eq $database) {
+                return ['Not Applicable']  if $mode =~ /^not_cached$/io;
+		(my $st = $dh->{dbh}->prepare(<<""))->execute;
+		select  datname , relfilenode as oid , 
+                        relblocknumber as bn, bytes
+		from pg_freespacemap_pages F
+			join pg_database D on (D.oid = F.reldatabase)
+		where bytes is not null
+
+		my (%o2n, $tcount);
+		$o2n{$database} = oid2name_per_db($o, $database);
+		my @ret;
+		while (my $h = $st->fetchrow_hashref) {
+		     my ($db,$oid,$count)=@{$h}{'datname', 'oid'} ;
+                     exists $o2n{$db} or $o2n{$db}=oid2name_per_db($o,$db);
+                     my $name  = $o2n{$db}->{$oid} || $oid  ;
+		     next if ($mode =~ /^user$/io)&&( $name =~ /^pg_/o);
+		     push @ret, sprintf '%-15s : %-35s %5d %8d', $db, $name, 
+                                            @{$h}{ 'bn','bytes'}
+		} 
+		return [ pgbufpages_desc,'',
+                         @ret
+                       ] ;
+	}else{
+		return [ "public.pg_buffercache is at $db_of_func" ];
+	}
+}   
+sub vac_settings {
+        my ($o)= @_;
+        my $dh = dbconnect ( $o, form_dsn($o,'') ) or return;
+        my $st = $dh->select([qw( name setting unit category)],
+                           'pg_settings');
+
+        [ map { my ($name,$val,$unit) = @{$_}[0..2];
+		my $default=$Pg::Pcurse::Defaults::pg_default->{$name};
+		undef $default if $default eq $val.$unit;
+		sprintf '%-29s%15s %s%20s',$name, $val,$unit, $default
+
+	      }
+	  grep {$_->[0] =~ /vacuum|track_counts/}
+          @{$st->fetchall_arrayref} ];
+}
+sub table3_of {
+        my ($o, $database , $schema, $table) = @_;
+        my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+        my $h  = $dh->select_one_to_hashref( [qw(  relname     seq_scan
+                                    n_tup_ins      n_tup_upd   n_tup_del
+                                    n_tup_hot_upd  n_live_tup  n_dead_tup
+                                    seq_tup_read   idx_scan    idx_tup_fetch
+                                    last_vacuum    last_autovacuum 
+                                    last_analyze   last_autoanalyze
+                               )],
+                              'pg_stat_user_tables',
+                              ['relname', '=', $dh->quote($table),
+                               'and','schemaname', '=', $dh->quote($schema)] );
+
+	my $res1 =
+	[ sprintf('%-20s : %10s', 'relname'  ,     $h->{relname}          ),
+	  sprintf('%-20s : %10d', 'n_tup_ins',     $h->{n_tup_ins}        ),
+	  sprintf('%-20s : %10d', 'n_tup_upd',     $h->{n_tup_upd}        ),
+	  sprintf('%-20s : %10d', 'n_tup_del',     $h->{n_tup_del}        ),
+	  sprintf('%-20s : %10d', 'n_tup_hot_upd', $h->{n_tup_hot_upd}    ),
+	  sprintf('%-20s : %10d', 'n_live_tup',    $h->{n_live_tup}       ),
+	  sprintf('%-20s : %10d', 'n_dead_tup',    $h->{n_dead_tup}       ),
+	  '','',
+	  sprintf('%-20s = %10d', 'up + del', $h->{n_tup_upd}+$h->{n_tup_del} ),
+	  sprintf('%-20s = %10d', 'up + del + ins',  
+                       $h->{n_tup_upd} + $h->{n_tup_del} + $h->{n_tup_ins} ),
+	];
+
+	## Find number or tuples
+	my $reltuples = reltuples( $dh , $table, $schema);
+
+	## Find params from pg_autovacuum or from pg_settings, in this order.
+	my ($vac_thresh, $vac_scale, $ana_thresh, $ana_scale)=
+                         (pg_autovacuum($dh, $table, $schema)) 
+                         ?  pg_autovacuum($dh, $table, $schema)
+                         :  pg_settings($dh) ;
+
+	my $vac_expected = $vac_thresh + ($vac_scale* $reltuples);
+	my $ana_expected = $ana_thresh + ($ana_scale* $reltuples);
+	my $res2 =
+	[ sprintf('%-20s %12d', 'autovacuum  kicks at' , $vac_expected), 
+	  sprintf('%-20s %12d', 'autoanalyze kicks at' , $ana_expected), 
+	];
+	[ @$res1, '', '', @$res2 ]
+}
+
+sub reltuples {
+	## Find number or tuples
+	my ($dh, $table, $schema) = @_;
+        my $h  = $dh->select_all_to_hashref(  [qw( relname reltuples )],
+                                              'pg_class',
+                                              ['relname=', $dh->quote($table)]);
+	$h->{person} || 0;
+}
+sub pg_settings {
+	## Find params from pg_settings
+	my $dh = shift;
+        my $h  = $dh->select_all_to_hashref( [qw( name  setting )],
+                                          'pg_settings',
+                                          ['name ~',$dh->quote('autovacuum')]);
+       @{$h}{'autovacuum_vacuum_threshold' ,'autovacuum_vacuum_scale_factor' ,
+	     'autovacuum_analyze_threshold','autovacuum_analyze_scale_factor',};
+}
+sub pg_autovacuum {
+	## Find params from pg_settings
+	my ($dh, $table, $schema) = @_;
+        my $st  = $dh->select( '*',
+                  'pg_autovacuum',
+                  ['vacrelid::regclass::text=',$dh->quote($table)]) or return;
+	my %h= $st->fetchrow_hash();
+        @h{'vac_base_thresh'  ,  'vac_scale_factor' ,
+	   'anl_base_thresh'  ,  'anl_scale_factor'  , } ;
+}
+
+sub tables_vacuum_desc {
+         sprintf '%-22s%22s%22s', 'NAME', 'vacuum', 'analyze'
+}
+sub tables_vacuum {
+        my ($o, $database , $schema) = @_;
+        $database or $database = $o->{dbname} ;
+        my $dh = dbconnect ( $o, form_dsn($o,$database)  ) or return;
+        $schema = $dh->quote($schema);
+        my $h  = $dh->{dbh}->selectall_arrayref(<<"");
+        select relname,
+                greatest( last_vacuum,  last_autovacuum ) as vacuum,
+                greatest( last_analyze, last_autoanalyze) as analyze
+        from pg_stat_all_tables
+        where schemaname=$schema
+        order by 2, 3, 1
+
+        for my $i (@$h) { $_=to_d($_)   for @$i; }
+        [ map { sprintf '%-22s%22s%22s', @{$_}[0..2]}
+               @{$h} ];
+}
+
 
 1;
 __END__
-
-

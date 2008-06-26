@@ -13,22 +13,17 @@ use Pg::Pcurse::Misc;
 use Pg::Pcurse::Query0;
 
 our @EXPORT = qw( 
-	tables_vacuum  
-        get_proc_desc  get_proc        tables_vacuum2
+        get_proc_desc  get_proc        
         table_buffers   over_dbs       over_dbs3
         analyze_tbl    analyze_db      vacuum_per_table
 	vacuum_tbl     vacuum_db       fsm_settings
 	reindex_tbl    reindex_db      table_stat
-	get_tables2_desc         tables_vacuum_desc   
 	bucardo_conf_desc 	 bucardo_conf
         pgbuffercache            buffercache_summary  pgbuffercache_desc
-	get_nspacl               all_databases_age       bufstat
+	get_nspacl               all_databases_age    bufstat
 
-	all_databases_desc       all_databases 
-	get_schemas              get_schemas2 
-	get_tables_all_desc      get_tables_all
+	all_databases_desc       all_databases        get_schemas2 
 	get_views_all_desc       get_views_all
-	index2_desc              index2 
 	index3_desc              index3                  index3b
 	get_index_desc           get_index 
 	table_stats_desc         table_stats 
@@ -40,13 +35,6 @@ our @EXPORT = qw(
 
 
 
-sub get_schemas {
-	my $database = shift;
-	my $dh = dbconnect ( 'dbi:Pg:dbname='. $database  ) or return;
-	my $h = $dh->select_all_to_hashref(
-                   [qw(nspname nspowner nspacl)], 'pg_namespace');
-	[keys %$h];
-}
 sub get_schemas2 {
 	my ($o, $database)   = @_;
 	$database or $database = $o->{dbname} ;
@@ -65,53 +53,6 @@ sub get_schemas2 {
 }
 
 
-sub get_tables2_desc {
-          sprintf '%-24s%-8s%4s',  'NAME',  'OWNER', '   I R T';
-}
-sub get_tables_all_desc {
-  sprintf '%-24s%30s','NAME',
-          'pages    tup  idx  att  ch  tr  fk ref  pk  ru sub';
-}
-sub get_tables_all { 
-	my ($o, $database , $schema) = @_;
-        $database or $database = $o->{dbname} ;
-	my $dh = dbconnect ( $o, form_dsn($o,$database)  ) or return;
-	$schema = $dh->quote($schema);
-        my $st = $dh->select({
-                     fields => [qw( relname      relpages    reltuples
-				    relhasindex  relnatts    relchecks  
-                                    reltriggers  relfkeys    relrefs 
-                                    relhaspkey   relhasrules relhassubclass
-                                   )],
-                     tables => 'pg_class,pg_namespace',
-	             join   => 'pg_class.relnamespace =  pg_namespace.oid',
-                     where  =>  ['pg_namespace.nspname', '=', $schema ,
-                                'and', 'relkind', '=', q('r') ],
-	           });
-	[ sort map { sprintf '%-25s%5s%6s%6s%4s%4s%4s%4s%4s%4s%4s%4s', @{$_}[0..11]}
-	       @{$st->fetchall_arrayref} ];
-
-;
-}
-sub index2_desc {
-     sprintf '%-30s%-10s%-10s %-10s %-10s','NAME', 'RELNAME',
-                    'idx_scan', 'idx_tup_read','idx_tup_fetch'
-}
-sub index2 {
-	my ($o, $database , $schema) = @_;
-	my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
-	$schema = $dh->quote( $schema );
-	my $h = $dh->{dbh}->selectall_arrayref( <<"");
-			select indexrelname, relname,  idx_scan,
-                               idx_tup_read,  idx_tup_fetch, indexrelid
-                         from pg_stat_user_indexes
-  	                 where schemaname = $schema
-	                 order by 3, 2
-
-        [ map { sprintf '%-30s  %-15s  %8s %8s %8s %90s', @{$_}[0..5] }
-	      @$h ]
-
-}
 sub get_proc_desc {
 	sprintf '%-25s%-9s%10s%8s%6s%6s%9s','NAME','LANG', 'strict', 'setof',
                                  'volit', 'nargs','type'
@@ -136,26 +77,6 @@ sub get_proc {
            @$h ];
 }
 
-sub tables_vacuum_desc {
-	 sprintf '%-22s%22s%22s', 'NAME', 'vacuum', 'analyze'
-}
-sub tables_vacuum {
-	my ($o, $database , $schema) = @_;
-        $database or $database = $o->{dbname} ;
-	my $dh = dbconnect ( $o, form_dsn($o,$database)  ) or return;
-	$schema = $dh->quote($schema);
-        my $h  = $dh->{dbh}->selectall_arrayref(<<"");
-	select relname,
-		greatest( last_vacuum,  last_autovacuum ) as vacuum,
-		greatest( last_analyze, last_autoanalyze) as analyze
-	from pg_stat_all_tables
-	where schemaname=$schema
-	order by 2, 3, 1
-
-        for my $i (@$h) { $_=to_d($_)   for @$i; }
-	[ map { sprintf '%-22s%22s%22s', @{$_}[0..2]}
-	       @{$h} ];
-}
 
 sub table_buffers { 
 	my ($o)= @_;
@@ -212,20 +133,6 @@ sub bufstat {
 	  '',
 	  sprintf( '%-20s:%13.2f %' , 'Forced from Buffer', $forced_ratio    ),
         ]
-}
-sub tables_vacuum2 { 
-	my $o = shift;
-	my $dh = dbconnect ( $o, form_dsn($o, '')  ) or return;
-        my $h  = $dh->{dbh}->selectall_arrayref(<<"");
-	select 'max database age',
-	      (select max(age(datfrozenxid)) from pg_database)::text
-	union
-	select name , setting
-	from pg_settings
-	where name~'vacuum'
-
-	[ map { sprintf '%-35s%20s', @{$_}[0..1]}
-		       @{$h} ];
 }
 sub table_stats_desc {
      sprintf '%-23s%15s%15s%13s%11s','NAME','seq-scan','idx_scan', '  seq/idx', 'ndead_tup', 
@@ -458,7 +365,7 @@ sub vacuum_per_table {
                       ]);
 
         my $r2 =
-        [ sprintf( '%-18s : %s', 'relname'          , $table                 ),
+        [ #sprintf( '%-18s : %s', 'relname'          , $table                 ),
           '',                                            
           sprintf( '%-18s : %s', 'n_dead_tup'       , $h->{n_dead_tup}       ),
           sprintf( '%-18s : %s', 'last_vacuum'      , $h->{last_vacuum}      ),
@@ -584,57 +491,6 @@ sub table_stat {
 }
 
 
-sub fsm_settings {
-        my ($o, $database )= @_;
-        my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
-
-	my $h = $dh->{dbh}->selectall_arrayref(<<"");
-	   select 
-	   (select setting from pg_settings where name='max_fsm_relations') ,
-	   (select setting from pg_settings where name='max_fsm_pages') 
-
-        my ($max_fsm_rel, $max_fsm_pages) = map { @{$_}[0..1]}  @$h ;
-        my $ret1 = [ sprintf( '%-15s: %10s', 'max_fsm_rel'  , $max_fsm_rel  ), 
-                     sprintf( '%-15s: %10s', 'max_fsm_pages', $max_fsm_pages),
-                   ];
-
-        # more results if we can fsm functions are installed, and we are super
-        $h = $dh->select_one_to_hashref(<<"");
-           user in (select rolname from pg_roles where rolsuper) as super
-
-        return $ret1  unless $h;
-	my $db_of_func = search4func( $o, 'pg_freespacemap_pages',
-                                        $database, databases2 $o ) ;
-
-	return $ret1  unless $db_of_func;
-        $dh = dbconnect ( $o, form_dsn($o, $db_of_func ) ) ;
-        my $stored_rel = $dh->select_one_to_hashref( 'count(1)',
-				  'pg_freespacemap_relations');
-        my $stored_pages = $dh->select_one_to_hashref( 'sum(storedpages)',
-                                  'pg_freespacemap_relations');
-        my $ret2 = [ 
-		sprintf( '%-15s: %10s', 'fsm_rel'  , $stored_rel->{count}), 
-		sprintf( '%-15s: %10s', 'fsm_pages', $stored_pages->{sum}),
-                   ];
-        my $st = $dh->select( {
-                 fields=>[qw(  datname      relfilenode::regclass
-			       avgrequest   interestingpages  storedpages     
-                         )], 
-		 table =>'pg_freespacemap_relations, pg_database',
-		 join  =>'pg_database.oid=pg_freespacemap_relations.reldatabase'
-                 });
-
-	my $ret3= [
-                '', sprintf( '%-10s %-31s %5s %5s %5s', '', '', 'avg.req',
-                                             'intrest.', ' stored',
-
-                    ),
-		map { sprintf '%-10s %-33s %5s %5s %5s', @{$_}[0..4] }
-               @{ $st->fetchall_arrayref}
-        ];
-
-        [ @$ret1, @$ret2, @$ret3 ];
-}
 sub all_databases_desc {
           sprintf '%-15s %8s %8s %8s %18s', 'NAME', 'BENDS','COMMIT',
                               '% READ',
@@ -686,16 +542,12 @@ sub buffercache_summary {
 and usagecount>1) as "usage>1"',
 ] ); 
 
-	[ sprintf( '%-10s : %s', 'total'  , $h->{total}),
-	  sprintf( '%-10s : %s', 'empty'  , $h->{empty}),
-	  sprintf( '%-10s : %s', 'taken'  , $h->{taken}),
-	  sprintf( '%-10s : %s', 'usage>1', $h->{'usage>1'}),
+	[ sprintf( '%-10s : %8d', 'total'  , $h->{total}),
+	  sprintf( '%-10s : %8d', 'empty'  , $h->{empty}),
+	  sprintf( '%-10s : %8d', 'taken'  , $h->{taken}),
+	  sprintf( '%-10s : %8d', 'usage>1', $h->{'usage>1'}),
 	]
 
-}
-sub index2_desc_ {
-     sprintf '%-30s%-10s%-10s %-10s %-10s','NAME', 'relname',
-                    'idx_scan', 'idx_tup_read','idx_tup_fetch'
 }
 sub index3_desc {
      sprintf '%-30s %11s %8s %10s %13s','NAME', 'tuples',
@@ -839,6 +691,63 @@ sub index3b {
           sprintf( '%-18s : %s', '% read/hit'    , 
 			   calc_read_ratio( $h->{bfetched}, $h->{bhit}) ),
 	]
+}
+
+sub fsm_settings {
+        my ($o, $database )= @_;
+        my $dh = dbconnect ( $o, form_dsn($o, $database ) ) or return;
+
+	my $h = $dh->{dbh}->selectall_arrayref(<<"");
+	   select 
+	   (select setting from pg_settings where name='max_fsm_relations') ,
+	   (select setting from pg_settings where name='max_fsm_pages') 
+
+        my ($max_fsm_rel, $max_fsm_pages) = map { @{$_}[0..1]}  @$h ;
+        my $ret1 = [ sprintf( '%-15s: %10s', 'max_fsm_rel'  , $max_fsm_rel  ), 
+                     sprintf( '%-15s: %10s', 'max_fsm_pages', $max_fsm_pages),
+                   ];
+
+        # more results if we can fsm functions are installed, and we are super
+        $h = $dh->select_one_to_hashref(<<"");
+           user in (select rolname from pg_roles where rolsuper) as super
+
+        return $ret1  unless $h;
+	my $db_of_func = search4func( $o, 'pg_freespacemap_pages',
+                                        $database, databases2 $o ) ;
+
+	return $ret1  unless $db_of_func;
+        $dh = dbconnect ( $o, form_dsn($o, $db_of_func ) ) ;
+        my $stored_rel = $dh->select_one_to_hashref( 'count(1)',
+				  'pg_freespacemap_relations');
+        my $stored_pages = $dh->select_one_to_hashref( 'sum(storedpages)',
+                                  'pg_freespacemap_relations');
+        my $ret2 = [ 
+		sprintf( '%-15s: %10s', 'fsm_rel'  , $stored_rel->{count}), 
+		sprintf( '%-15s: %10s', 'fsm_pages', $stored_pages->{sum}),
+                   ];
+        my $st = $dh->select( {
+                 fields=>[qw(  datname      relfilenode
+			       avgrequest   interestingpages  storedpages     
+                         )], 
+		 table =>'pg_freespacemap_relations, pg_database',
+		 join  =>'pg_database.oid=pg_freespacemap_relations.reldatabase'
+                 });
+
+	my (%o2n,$total_pages, $total_rel);
+	$o2n{$database} = oid2name_per_db($o, $database);
+	my $r3 = [
+                   '', sprintf( '%-10s %-31s %9s %9s %8s', '', '', 'avg.req',
+                                             'intrest', ' stored'),
+		    map {  my ($db, $oid, $num) =@{$_}[0..1,4];
+		       $total_pages += $num; $total_rel++ ;
+	               exists $o2n{$db} or $o2n{$db}=oid2name_per_db($o,$db);
+	               $oid  = $o2n{$db}->{$oid} || $oid  ;
+	               sprintf '%-10s %-33s %8d %8d %8d', $db,$oid,@{$_}[2..4]
+                    } @{ $st->fetchall_arrayref}
+                 ];
+        [ @$ret1, @$ret2, @$r3 ,'', 
+          sprintf 'Relations = %4d, %45s = %5d',$total_rel,'Pages',$total_pages 
+        ];
 }
 sub pgbuffercache_desc {
 	sprintf '%-36s  %9s %10s %20s',  

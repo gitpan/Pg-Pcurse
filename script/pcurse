@@ -30,18 +30,21 @@ unless (my $dh = dbconnect ( $opt, form_dsn($opt, '' ) ) ) {
 	exit(0);
 }
 
-#print Dumper  fsm_settings( $opt, 'misc' ) ; exit;
-#print Dumper pgbuffercache( $opt, 'misc', 'not_cached'); exit; 
+#print Dumper vac_settings ( $opt ); exit;
+#print Dumper table3_of($opt, 'people' , 'public', 'person') ; exit;
+#print Dumper tables_vacuum($opt, 'people','public'); exit;
+
 init_screen;
 $::mwh  = create_root;
 my $dbs  = [ databases2 $opt ];
 my $main = form_dbmenu ($dbs);
 undef $::db;
 $::mode='stats';
-$::mode='buffers';
+$::mode='vacuum';
 $::mode='tables';
 
 init_mini_root;
+
 
 while(2) {
 	$main->execute($::mwh);
@@ -49,14 +52,7 @@ while(2) {
 	# $main::db is initialized from  _Database_Menu_Choice()
         $::dbname  = $main::db || $opt->{dbname} || $dbs->[0] || 'template1';
 
-	# display database name
-        $::mwh->addstr(5,10, sprintf 'Mode  : %-13s', ' '   );
-        $::mwh->addstr(6,10, sprintf 'DBase : %-13s' , ' '   );
-        $::mwh->addstr(5,10, sprintf 'Mode  : %-13s', ucfirst$::mode );
-        $::mwh->addstr(6,10, sprintf 'DBase : %-8s', $::dbname       );
-        $::mwh->addstr(7,10, sprintf 'User  : %-8s', $opt->{user}    );
-        $::mwh->addstr(8,10, sprintf 'Host  : %-8s', $opt->{host}    );
-	$main->draw($::mwh,0);
+        display_strings ( $::mwh, $opt, $::mode, $::dbname);
 
 	# act according to ::mode
 	eval { execute_mode( $::mode); };
@@ -71,6 +67,17 @@ END {
 		$::mwh->refresh;  
 	}
         endwin() 
+}
+
+sub display_strings {
+	my ( $win, $o, $mode, $dbname) = @_ ;
+        $win->addstr(5,10, sprintf 'Mode  : %-13s', ' '   );
+        $win->addstr(6,10, sprintf 'DBase : %-13s' , ' '   );
+        $win->addstr(5,10, sprintf 'Mode  : %-13s', ucfirst$mode );
+        $win->addstr(6,10, sprintf 'DBase : %-8s', $dbname       );
+        $win->addstr(7,10, sprintf 'User  : %-8s', $o->{user}    );
+        $win->addstr(8,10, sprintf 'Host  : %-8s', $o->{host}    );
+	$main->draw($win,0);
 }
 1;
 __END__
