@@ -4,13 +4,15 @@ package Pg::Pcurse::Misc;
 use 5.008008;
 use Carp::Assert;
 use Getopt::Long;
-use base 'Exporter';
-our $VERSION = '0.08';
 use Data::Dumper;
 use User::pwent;
 use File::Slurp qw( slurp );
+use strict;
+use warnings;
+use base 'Exporter';
+our $VERSION = '0.08';
 
-@EXPORT = qw(
+our @EXPORT = qw(
 	get_getopt
 	process_options
 	$bucardo_defaults
