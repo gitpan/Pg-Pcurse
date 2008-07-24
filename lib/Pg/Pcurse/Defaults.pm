@@ -4,7 +4,8 @@
 package Pg::Pcurse::Defaults;
 use 5.008008;
 our $VERSION = '0.15';
-
+use warnings;
+use strict;
 
 our @EXPORT =   qw(
 	$bucardo_defaults

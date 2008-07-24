@@ -1,5 +1,8 @@
 Revision history for Perl extension Pg::Pcurse.
 
+0.22  Wed Jul 23 21:48:23 2008
+        - Fixed license entry (to perl)
+
 0.20  Thu Jun 26 02:23:59 2008
         - In vacuum mode, Ctrl-L shows configuration settings
         - In vacuum mode, fixed listing of tables so they are ordered

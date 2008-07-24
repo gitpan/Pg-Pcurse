@@ -4,6 +4,7 @@ use ExtUtils::MakeMaker;
 
 WriteMakefile(
     PL_FILES          => {},
+    LICENSE           => 'perl',
     NAME              => 'Pg::Pcurse',
     VERSION_FROM      => 'lib/Pg/Pcurse.pm',
     PREREQ_PM         => { 
