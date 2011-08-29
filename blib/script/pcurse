@@ -1,4 +1,7 @@
-#!/usr/bin/perl -l
+#!/usr/local/bin/perl -l
+
+eval 'exec /usr/local/bin/perl -l -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
 # Copyright (C) 2008 Ioannis Tambouras <ioannis@cpan.org>. All rights reserved.
 # # LICENSE:  GPLv3, eead licensing terms at  http://www.fsf.org .
 

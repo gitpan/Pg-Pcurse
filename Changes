@@ -1,5 +1,8 @@
 Revision history for Perl extension Pg::Pcurse.
 
+0.23  Sun Aug 29 01:05:01 2011
+       - Regular upkeep: changed installer, changed and added tests
+
 0.22  Wed Jul 23 21:48:23 2008
         - Fixed license entry (to perl)
 

@@ -1,5 +1,4 @@
-use 5.008008;
-use ExtUtils::MakeMaker;
+use inc::Module::Install;
 
 
 WriteMakefile(
@@ -8,9 +7,7 @@ WriteMakefile(
     NAME              => 'Pg::Pcurse',
     VERSION_FROM      => 'lib/Pg/Pcurse.pm',
     PREREQ_PM         => { 
-	                   #'FindBin'            => '1.47',
-	                   #'Log::Log4perl'      => '1.06',
-			   #'Text::Autoformat'   => '0',
+	                   'Log::Log4perl'       => '1.06',
 	                   'DBIx::Abstract'      => '1.006',
 	                   'Data::Dumper'        => '2.121_08',
 	                   'Carp::Assert'        => '0.18',
@@ -19,8 +16,8 @@ WriteMakefile(
 	                   'Getopt::Long'        => '2.35',
 	                   'File::Slurp'         => '9999.12',
 	                   'User::pwent'         => '1.00',
-                           'Test::Pod::Coverage' => '1.0',
-                           'Test::Pod'           => '1.0',
+                       'Test::Pod::Coverage' => '1.0',
+                       'Test::Pod'           => '1.0',
                          },
     EXE_FILES         =>  [ 'script/pcurse'],
     ABSTRACT_FROM     => 'lib/Pg/Pcurse.pm',
