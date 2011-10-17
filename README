@@ -55,8 +55,20 @@ DBIx::Abstract
 Data::Dumper
 File::Slurp
 User::pwent
+Log::Log4perl
 
+This module requires these modules for testing:
 
+Test::Pod
+Test::Pod::Coverage
+Test::HasVersion
+Test::CPAN::Meta
+Test::Exception
+Test::Distribution
+Test::Dependencies
+Test::MinimumVersion
+Test::Strict
+Test::Spelling
 
 
 COPYRIGHT AND LICENCE

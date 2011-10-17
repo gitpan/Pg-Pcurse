@@ -2,7 +2,7 @@ use Test::More  'no_plan';
 
 eval ' use Test::MinimumVersion ';
 
-my $version = '5.008';
+my $version = v5.10;
 my $args = { paths => [qw( ../t t  ../blib blib )] };
 
 

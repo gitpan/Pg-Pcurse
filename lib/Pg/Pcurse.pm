@@ -17,7 +17,7 @@ use Pg::Pcurse::Query1;
 use Pg::Pcurse::Query2;
 use Pg::Pcurse::Query3;
 
-our $VERSION = '0.23';
+our $VERSION = '0.25';
 
 our $opt;
 

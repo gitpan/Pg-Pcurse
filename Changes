@@ -1,5 +1,12 @@
 Revision history for Perl extension Pg::Pcurse.
 
+0.25  Mon Oct 17 04:01:03 2011
+	   - new Makefile.PL
+	   - added a few expect tests for pcurse(1)
+
+0.24  Sun Aug 29 01:05:01 2011
+       - Added prereqs 
+
 0.23  Sun Aug 29 01:05:01 2011
        - Regular upkeep: changed installer, changed and added tests
 

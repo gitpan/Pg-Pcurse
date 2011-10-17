@@ -1,9 +1,9 @@
-#!/usr/bin/perl -l
+#!/usr/bin/env perl
 # Copyright (C) 2008 Ioannis Tambouras <ioannis@cpan.org>. All rights reserved.
 # # LICENSE:  GPLv3, eead licensing terms at  http://www.fsf.org .
 
-use lib qw( ../blib/lib ) ;
-use v5.8;
+#use lib qw( ../blib/lib ) ;
+use v5.10;
 use Curses;
 use Pg::Pcurse;
 use Pg::Pcurse::Widget;
